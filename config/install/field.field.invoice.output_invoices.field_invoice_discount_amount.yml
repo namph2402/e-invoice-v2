@@ -1,0 +1,22 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.output_invoices
+    - field.storage.invoice.field_invoice_discount_amount
+id: invoice.output_invoices.field_invoice_discount_amount
+field_name: field_invoice_discount_amount
+entity_type: invoice
+bundle: output_invoices
+label: 'Invoice discount amount'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal

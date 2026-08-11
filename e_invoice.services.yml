@@ -1,0 +1,23 @@
+services:
+  logger.channel.e_invoice:
+    parent: logger.channel_base
+    arguments: ["e_invoice"]
+
+  plugin.manager.invoice_providers:
+    class: Drupal\e_invoice\InvoiceProvidersPluginManager
+    parent: default_plugin_manager
+
+  e_invoice.template_manager:
+    class: Drupal\e_invoice\Service\TemplateManager
+    arguments: ['@config.factory']
+
+  e_invoice.get_number_to_words:
+    class: Drupal\e_invoice\Service\GetNumberToWords
+
+  e_invoice.get_config:
+    class: Drupal\e_invoice\Service\GetConfigInvoice
+    arguments: ["@messenger", "@e_invoice.handle_invoice"]
+
+  e_invoice.handle_invoice:
+    class: Drupal\e_invoice\Service\HandleInvoice
+    arguments: ["@plugin.manager.invoice_providers", "@entity_type.manager", "@entity_field.manager", "@file_system", "@file.repository", "@logger.channel.e_invoice", "@token"]

@@ -1,0 +1,36 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.taxonomy_term.field_inv_templates
+    - taxonomy.vocabulary.config_e_invoice
+  module:
+    - datafield
+id: taxonomy_term.config_e_invoice.field_inv_templates
+field_name: field_inv_templates
+entity_type: taxonomy_term
+bundle: config_e_invoice
+label: Templates
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  field_settings:
+    name:
+      label: Name
+      list: false
+      allowed_values: ''
+      required: false
+    pattern:
+      label: Pattern
+      list: false
+      allowed_values: ''
+      required: false
+    serial:
+      label: Serial
+      list: false
+      allowed_values: ''
+      required: false
+field_type: data_field

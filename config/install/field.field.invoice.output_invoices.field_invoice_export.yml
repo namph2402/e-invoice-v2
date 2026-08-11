@@ -1,0 +1,22 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.output_invoices
+    - field.storage.invoice.field_invoice_export
+  module:
+    - options
+id: invoice.output_invoices.field_invoice_export
+field_name: field_invoice_export
+entity_type: invoice
+bundle: output_invoices
+label: 'Invoice export'
+description: ''
+required: false
+translatable: false
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings: {  }
+field_type: list_integer

@@ -1,0 +1,7 @@
+administer invoice:
+  title: "Administer invoices"
+  restrict access: true
+
+view invoice:
+  title: "View invoices"
+  restrict access: true

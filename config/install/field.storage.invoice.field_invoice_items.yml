@@ -1,0 +1,119 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - datafield
+    - e_invoice
+id: invoice.field_invoice_items
+field_name: field_invoice_items
+entity_type: invoice
+type: data_field
+settings:
+  columns:
+    item_id:
+      name: item_id
+      type: integer
+      max_length: 20
+      size: small
+      unsigned: false
+    item_code:
+      name: item_code
+      type: string
+      max_length: 255
+      size: normal
+    item_name:
+      name: item_name
+      type: string
+      max_length: 500
+      size: normal
+    item_unit:
+      name: item_unit
+      type: string
+      max_length: 255
+      size: normal
+    item_quantity:
+      name: item_quantity
+      type: float
+      max_length: 255
+      size: normal
+      precision: 10
+      unsigned: false
+      scale: 2
+    item_price:
+      name: item_price
+      type: float
+      max_length: 255
+      size: normal
+      precision: 20
+      unsigned: false
+      scale: 2
+    item_amount:
+      name: item_amount
+      type: float
+      max_length: 255
+      size: normal
+      precision: 20
+      unsigned: false
+      scale: 2
+    item_discount_rate:
+      name: item_discount_rate
+      type: string
+      max_length: 20
+      size: normal
+    item_discount_amount:
+      name: item_discount_amount
+      type: float
+      max_length: 255
+      size: normal
+      precision: 20
+      unsigned: false
+      scale: 2
+    item_amount_without_vat:
+      name: item_amount_without_vat
+      type: float
+      max_length: 255
+      size: normal
+      precision: 20
+      unsigned: false
+      scale: 2
+    item_vat_rate:
+      name: item_vat_rate
+      type: float
+      max_length: 255
+      size: normal
+      precision: 10
+      unsigned: false
+      scale: 2
+    item_vat_amount:
+      name: item_vat_amount
+      type: float
+      max_length: 255
+      size: normal
+      precision: 20
+      unsigned: false
+      scale: 2
+    item_total_amount:
+      name: item_total_amount
+      type: float
+      max_length: 255
+      size: normal
+      precision: 20
+      unsigned: false
+      scale: 2
+    item_type:
+      name: item_type
+      type: string
+      max_length: 10
+      size: normal
+    item_exist:
+      name: item_exist
+      type: string
+      max_length: 10
+      size: normal
+module: datafield
+locked: false
+cardinality: -1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

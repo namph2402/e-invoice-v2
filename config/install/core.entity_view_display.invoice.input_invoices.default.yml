@@ -1,0 +1,552 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.input_invoices
+    - field.field.invoice.input_invoices.field_invoice_accountant
+    - field.field.invoice.input_invoices.field_invoice_accounting_date
+    - field.field.invoice.input_invoices.field_invoice_amount
+    - field.field.invoice.input_invoices.field_invoice_amount_without_vat
+    - field.field.invoice.input_invoices.field_invoice_buyer_address
+    - field.field.invoice.input_invoices.field_invoice_buyer_name
+    - field.field.invoice.input_invoices.field_invoice_buyer_taxcode
+    - field.field.invoice.input_invoices.field_invoice_date
+    - field.field.invoice.input_invoices.field_invoice_discount_amount
+    - field.field.invoice.input_invoices.field_invoice_id
+    - field.field.invoice.input_invoices.field_invoice_import
+    - field.field.invoice.input_invoices.field_invoice_items
+    - field.field.invoice.input_invoices.field_invoice_mccqt
+    - field.field.invoice.input_invoices.field_invoice_no
+    - field.field.invoice.input_invoices.field_invoice_payment
+    - field.field.invoice.input_invoices.field_invoice_pdf
+    - field.field.invoice.input_invoices.field_invoice_refno
+    - field.field.invoice.input_invoices.field_invoice_relateds
+    - field.field.invoice.input_invoices.field_invoice_seller_address
+    - field.field.invoice.input_invoices.field_invoice_seller_name
+    - field.field.invoice.input_invoices.field_invoice_seller_taxcode
+    - field.field.invoice.input_invoices.field_invoice_status
+    - field.field.invoice.input_invoices.field_invoice_total_amount
+    - field.field.invoice.input_invoices.field_invoice_vat_amount
+    - field.field.invoice.input_invoices.field_invoice_vat_rate
+    - field.field.invoice.input_invoices.field_invoice_xml
+  module:
+    - datafield
+    - datetime
+    - field_group
+    - input_pattern
+    - options
+third_party_settings:
+  field_group:
+    group_div_padding:
+      children:
+        - group_div_seller
+        - group_div_buyer
+        - field_invoice_relateds
+        - group_div_table
+        - group_div_detail
+      label: 'Div padding'
+      parent_name: ''
+      region: content
+      weight: 0
+      format_type: html_element
+      format_settings:
+        classes: 'shadow rounded-3 border p-2'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+    group_div_buyer:
+      children:
+        - field_invoice_buyer_name
+        - field_invoice_buyer_taxcode
+        - field_invoice_buyer_address
+        - field_invoice_payment
+      label: 'Div buyer'
+      parent_name: group_div_padding
+      region: content
+      weight: 27
+      format_type: html_element
+      format_settings:
+        classes: 'pb-2 border-bottom'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+    group_div_seller:
+      children:
+        - field_invoice_seller_name
+        - field_invoice_seller_taxcode
+        - field_invoice_seller_address
+      label: 'Div seller'
+      parent_name: group_div_padding
+      region: content
+      weight: 26
+      format_type: html_element
+      format_settings:
+        classes: 'pb-2 border-bottom'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+    group_div_detail:
+      children:
+        - field_invoice_items
+        - group_div_row_total
+      label: 'Div detail'
+      parent_name: group_div_padding
+      region: content
+      weight: 34
+      format_type: html_element
+      format_settings:
+        classes: 'border shadow'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+    group_div_row_total:
+      children:
+        - field_invoice_amount
+        - field_invoice_discount_amount
+        - field_invoice_amount_without_vat
+        - field_invoice_vat_rate
+        - field_invoice_vat_amount
+        - field_invoice_total_amount
+      label: 'Div row total'
+      parent_name: group_div_detail
+      region: content
+      weight: 12
+      format_type: html_element
+      format_settings:
+        classes: 'row mx-0 text-end'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+    group_div_table:
+      children:
+        - field_invoice_no
+        - field_invoice_status
+        - field_invoice_date
+        - field_invoice_accountant
+        - field_invoice_accounting_date
+      label: ''
+      parent_name: group_div_padding
+      region: content
+      weight: 29
+      format_type: bootstrap_table
+      format_settings:
+        direction: horizontal
+        label_visibility: caption
+        empty_field_placeholder: ''
+        custom_header: ''
+        color_header: ''
+        responsive: ''
+        id: ''
+        classes: ''
+        show_empty_fields: 0
+        label_as_html: 0
+        always_show_field_value: 0
+        style_options:
+          table-striped: 0
+          table-dark: 0
+          table-bordered: 0
+          table-hover: 0
+          table-sm: 0
+        hide_table_if_empty: 0
+id: invoice.input_invoices.default
+targetEntityType: invoice
+bundle: input_invoices
+mode: default
+content:
+  field_invoice_accountant:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 33
+    region: content
+  field_invoice_accounting_date:
+    type: datetime_plain
+    label: above
+    settings:
+      timezone_override: ''
+    third_party_settings: {  }
+    weight: 34
+    region: content
+  field_invoice_amount:
+    type: number_decimal
+    label: inline
+    settings:
+      thousand_separator: .
+      decimal_separator: .
+      scale: 0
+      prefix_suffix: true
+    third_party_settings: {  }
+    weight: 3
+    region: content
+  field_invoice_amount_without_vat:
+    type: number_decimal
+    label: inline
+    settings:
+      thousand_separator: .
+      decimal_separator: .
+      scale: 0
+      prefix_suffix: true
+    third_party_settings: {  }
+    weight: 5
+    region: content
+  field_invoice_buyer_address:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 17
+    region: content
+  field_invoice_buyer_name:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 15
+    region: content
+  field_invoice_buyer_taxcode:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 16
+    region: content
+  field_invoice_date:
+    type: datetime_plain
+    label: above
+    settings:
+      timezone_override: ''
+    third_party_settings: {  }
+    weight: 32
+    region: content
+  field_invoice_discount_amount:
+    type: number_decimal
+    label: inline
+    settings:
+      thousand_separator: .
+      decimal_separator: .
+      scale: 0
+      prefix_suffix: true
+    third_party_settings: {  }
+    weight: 4
+    region: content
+  field_invoice_items:
+    type: data_field_table_formatter
+    label: hidden
+    settings:
+      number_column: false
+      number_column_label: №
+      direction: horizontal
+      mode: table
+      caption: ''
+      footer_text: ''
+      datatables_options:
+        bExpandable: 0
+        bInfo: 0
+        scrollX: 0
+        bStateSave: 0
+        ordering: 0
+        paging: 0
+        searching: 0
+        show-export: 0
+        bMultiFilter: 0
+      bootstrap_table_options:
+        sticky-header: 0
+        show-export: 0
+        show-print: 0
+        show-copy-rows: 0
+        show-multi-sort: 0
+        show-fullscreen: 0
+        search: 0
+        show-refresh: 0
+        show-toggle: 0
+        show-columns: 0
+        mobile-responsive: 0
+        sortable: 0
+        click-to-select: 0
+        show-pagination-switch: 0
+        pagination: 0
+        show-footer: 0
+      formatter_settings:
+        item_id:
+          format_type: number_integer
+          hidden: '1'
+          thousand_separator: ''
+          prefix_suffix: '1'
+          column_label: Id
+          weight: '0'
+          show_label: 0
+          sum_column: 0
+        item_code:
+          format_type: string
+          hidden: '1'
+          column_label: Mã
+          weight: '0'
+          show_label: 0
+        item_name:
+          format_type: string
+          column_label: Tên
+          weight: '0'
+          hidden: 0
+          show_label: 0
+        item_unit:
+          format_type: string
+          column_label: 'Đơn vị'
+          weight: '0'
+          hidden: 0
+          show_label: 0
+        item_quantity:
+          format_type: number_unformatted
+          decimal_separator: .
+          scale: '0'
+          thousand_separator: .
+          prefix_suffix: '1'
+          column_label: 'Số lượng'
+          weight: '0'
+          hidden: 0
+          show_label: 0
+          sum_column: 0
+        item_price:
+          format_type: number_unformatted
+          decimal_separator: .
+          scale: '0'
+          thousand_separator: .
+          prefix_suffix: '1'
+          column_label: 'Đơn giá'
+          weight: '0'
+          hidden: 0
+          show_label: 0
+          sum_column: 0
+        item_amount:
+          format_type: number_unformatted
+          hidden: '1'
+          decimal_separator: .
+          scale: '0'
+          thousand_separator: .
+          prefix_suffix: '1'
+          column_label: 'Thành tiền'
+          weight: '0'
+          show_label: 0
+          sum_column: 0
+        item_discount_rate:
+          format_type: string
+          hidden: '1'
+          column_label: 'Tỉ lệ chiết khấu'
+          weight: '0'
+          show_label: 0
+        item_discount_amount:
+          format_type: number_unformatted
+          decimal_separator: .
+          scale: '0'
+          thousand_separator: .
+          prefix_suffix: '1'
+          column_label: 'Chiết khấu'
+          weight: '0'
+          hidden: 0
+          show_label: 0
+          sum_column: 0
+        item_amount_without_vat:
+          format_type: number_unformatted
+          hidden: '1'
+          decimal_separator: .
+          scale: '0'
+          thousand_separator: .
+          prefix_suffix: '1'
+          column_label: 'Tiền trước thuế'
+          weight: '0'
+          show_label: 0
+          sum_column: 0
+        item_vat_rate:
+          format_type: number_unformatted
+          decimal_separator: .
+          scale: '2'
+          thousand_separator: ''
+          prefix_suffix: '1'
+          column_label: Thuế
+          weight: '0'
+          hidden: 0
+          show_label: 0
+          sum_column: 0
+        item_vat_amount:
+          format_type: number_unformatted
+          decimal_separator: .
+          scale: '0'
+          thousand_separator: .
+          prefix_suffix: '1'
+          column_label: 'Tiền thuế'
+          weight: '0'
+          hidden: 0
+          show_label: 0
+          sum_column: 0
+        item_total_amount:
+          format_type: number_unformatted
+          decimal_separator: .
+          scale: '0'
+          thousand_separator: .
+          prefix_suffix: '1'
+          column_label: 'Tổng tiền'
+          weight: '0'
+          hidden: 0
+          show_label: 0
+          sum_column: 0
+        item_type:
+          format_type: string
+          hidden: '1'
+          column_label: 'Loại hàng'
+          weight: '0'
+          show_label: 0
+        item_exist:
+          format_type: ''
+          hidden: '1'
+          column_label: 'Tồn tại'
+          weight: '0'
+          show_label: 0
+      custom_class: ''
+      export_name: ''
+      ajax: 0
+      line_operations: 0
+      form_format_table: 0
+    third_party_settings: {  }
+    weight: 11
+    region: content
+  field_invoice_no:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 30
+    region: content
+  field_invoice_payment:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 18
+    region: content
+  field_invoice_relateds:
+    type: list_attributes
+    label: inline
+    settings:
+      wrapper_attributes: ''
+      attributes: ''
+      attached: ''
+      list_type: ul
+    third_party_settings: {  }
+    weight: 28
+    region: content
+  field_invoice_seller_address:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 26
+    region: content
+  field_invoice_seller_name:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 24
+    region: content
+  field_invoice_seller_taxcode:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 25
+    region: content
+  field_invoice_status:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 31
+    region: content
+  field_invoice_total_amount:
+    type: number_decimal
+    label: inline
+    settings:
+      thousand_separator: .
+      decimal_separator: .
+      scale: 0
+      prefix_suffix: true
+    third_party_settings: {  }
+    weight: 8
+    region: content
+  field_invoice_vat_amount:
+    type: number_decimal
+    label: inline
+    settings:
+      thousand_separator: .
+      decimal_separator: .
+      scale: 0
+      prefix_suffix: true
+    third_party_settings: {  }
+    weight: 7
+    region: content
+  field_invoice_vat_rate:
+    type: number_decimal
+    label: inline
+    settings:
+      thousand_separator: .
+      decimal_separator: .
+      scale: 0
+      prefix_suffix: true
+    third_party_settings: {  }
+    weight: 6
+    region: content
+hidden:
+  created: true
+  description: true
+  field_invoice_id: true
+  field_invoice_import: true
+  field_invoice_mccqt: true
+  field_invoice_pdf: true
+  field_invoice_refno: true
+  field_invoice_xml: true
+  label: true
+  status: true
+  uid: true

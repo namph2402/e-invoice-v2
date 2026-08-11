@@ -1,0 +1,35 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+    - options
+id: invoice.field_invoice_status_cqt
+field_name: field_invoice_status_cqt
+entity_type: invoice
+type: list_integer
+settings:
+  allowed_values:
+    -
+      value: 0
+      label: 'Chưa gửi CQT'
+    -
+      value: 1
+      label: 'Đã gửi CQ'
+    -
+      value: 2
+      label: 'HĐ hợp lệ'
+    -
+      value: 3
+      label: 'HĐ không hợp lệ'
+    -
+      value: 4
+      label: 'TĐ không hợp lệ'
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

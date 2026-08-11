@@ -1,0 +1,8 @@
+langcode: en
+status: true
+dependencies: {  }
+name: 'Config e-invoice'
+vid: config_e_invoice
+description: 'E-invoice integration configuration.'
+weight: 0
+new_revision: false

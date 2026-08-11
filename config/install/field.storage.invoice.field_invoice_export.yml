@@ -1,0 +1,29 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+    - options
+id: invoice.field_invoice_export
+field_name: field_invoice_export
+entity_type: invoice
+type: list_integer
+settings:
+  allowed_values:
+    -
+      value: 0
+      label: 'Chưa export'
+    -
+      value: 1
+      label: 'Đã export'
+    -
+      value: 2
+      label: 'Không export'
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

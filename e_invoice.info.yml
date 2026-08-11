@@ -1,0 +1,19 @@
+name: "E-Invoice"
+type: module
+description: "Electronic invoice integration"
+package: Invoice
+core_version_requirement: ^10 || ^11
+dependencies:
+  - drupal:field
+  - drupal:file
+  - drupal:node
+  - drupal:options
+  - drupal:datetime
+  - drupal:link
+  - drupal:taxonomy
+  - drupal:telephone
+  - drupal:user
+  - drupal:views
+  - datafield:datafield
+  - field_group:field_group
+  - input_pattern:input_pattern

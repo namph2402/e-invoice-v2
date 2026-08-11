@@ -1,0 +1,22 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.input_invoices
+    - field.storage.invoice.field_invoice_amount_without_vat
+id: invoice.input_invoices.field_invoice_amount_without_vat
+field_name: field_invoice_amount_without_vat
+entity_type: invoice
+bundle: input_invoices
+label: 'Invoice amount without vat'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal

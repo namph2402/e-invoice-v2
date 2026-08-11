@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.output_invoices
+    - field.storage.invoice.field_invoice_issue
+id: invoice.output_invoices.field_invoice_issue
+field_name: field_invoice_issue
+entity_type: invoice
+bundle: output_invoices
+label: 'Invoice issue'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  on_label: 'On'
+  off_label: 'Off'
+field_type: boolean

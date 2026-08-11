@@ -1,0 +1,11 @@
+entity.invoice.collection:
+  title: "Invoices"
+  description: "List of invoices."
+  route_name: entity.invoice.collection
+  parent: system.admin_content
+
+entity.invoice_type.collection:
+  title: "Invoice types"
+  description: "Manage and CRUD actions on Invoice type."
+  parent: system.admin_structure
+  route_name: entity.invoice_type.collection

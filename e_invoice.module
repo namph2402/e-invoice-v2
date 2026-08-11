@@ -1,0 +1,66 @@
+<?php
+
+/**
+ * @file
+ * E-invoice module.
+ */
+
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Render\Element;
+
+/**
+ * Implements hook_theme().
+ */
+function e_invoice_theme(): array {
+  return [
+    "invoice" => ["render element" => "elements"],
+  ];
+}
+
+/**
+ * Prepares variables for invoice templates.
+ *
+ * Default template: invoice.html.twig.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - elements: An associative array containing the invoice information and any
+ *     fields attached to the entity.
+ *   - attributes: HTML attributes for the containing element.
+ */
+function template_preprocess_invoice(array &$variables): void {
+  $variables["view_mode"] = $variables["elements"]["#view_mode"];
+  foreach (Element::children($variables["elements"]) as $key) {
+    $variables["content"][$key] = $variables["elements"][$key];
+  }
+}
+
+/**
+ * Implements hook_entity_presave().
+ */
+function e_invoice_entity_presave(EntityInterface $entity) {
+  if ($entity->getEntityTypeId() !== "taxonomy_term"
+    || $entity->bundle() !== "config_e_invoice"
+    || !empty($entity->skip_call_token))
+  {
+    return;
+  }
+
+  $langcode = $entity->language()->getId();
+
+  /** @var \Drupal\taxonomy\TermInterface $entity */
+  $translation = $entity->hasTranslation($langcode)
+    ? $entity->getTranslation($langcode)
+    : $entity;
+
+  /** @var \Drupal\e_invoice\Service\GetConfigInvoice $config_service */
+  $config_service = \Drupal::service("e_invoice.get_config");
+  $config = $config_service->buildConfig($translation);
+
+  if (empty($config["invoice_appid"]) || empty($config["invoice_client"])) {
+    return;
+  }
+
+  // Chỉ gán field, không save vì đang ở presave.
+  $config_service->refreshToken($translation, $config);
+}

@@ -1,0 +1,29 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+    - options
+id: invoice.field_invoice_payment
+field_name: field_invoice_payment
+entity_type: invoice
+type: list_string
+settings:
+  allowed_values:
+    -
+      value: inv_tm
+      label: TM
+    -
+      value: inv_ck
+      label: CK
+    -
+      value: inv_tm_ck
+      label: TM/CK
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

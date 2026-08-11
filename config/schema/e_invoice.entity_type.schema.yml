@@ -1,0 +1,12 @@
+e_invoice.invoice_type.*:
+  type: config_entity
+  label: 'Invoice type config'
+  mapping:
+    id:
+      type: string
+      label: 'ID'
+    label:
+      type: label
+      label: 'Label'
+    uuid:
+      type: string

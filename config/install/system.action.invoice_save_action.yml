@@ -1,0 +1,10 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+id: invoice_save_action
+label: 'Save invoices'
+type: invoice
+plugin: entity:save_action:invoice
+configuration: {  }

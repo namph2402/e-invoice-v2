@@ -1,0 +1,34 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - datafield
+    - taxonomy
+id: taxonomy_term.field_inv_templates
+field_name: field_inv_templates
+entity_type: taxonomy_term
+type: data_field
+settings:
+  columns:
+    name:
+      name: name
+      type: string
+      max_length: 255
+      size: normal
+    pattern:
+      name: pattern
+      type: string
+      max_length: 255
+      size: normal
+    serial:
+      name: serial
+      type: string
+      max_length: 255
+      size: normal
+module: datafield
+locked: false
+cardinality: -1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

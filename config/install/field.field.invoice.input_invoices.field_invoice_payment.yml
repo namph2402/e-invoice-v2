@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.input_invoices
+    - field.storage.invoice.field_invoice_payment
+  module:
+    - options
+id: invoice.input_invoices.field_invoice_payment
+field_name: field_invoice_payment
+entity_type: invoice
+bundle: input_invoices
+label: 'Invoice payment'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: list_string

@@ -1,0 +1,10 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+id: invoice_delete_action
+label: 'Delete invoices'
+type: invoice
+plugin: entity:delete_action:invoice
+configuration: {  }

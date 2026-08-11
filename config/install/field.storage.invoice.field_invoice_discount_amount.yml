@@ -1,0 +1,19 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+id: invoice.field_invoice_discount_amount
+field_name: field_invoice_discount_amount
+entity_type: invoice
+type: decimal
+settings:
+  precision: 20
+  scale: 2
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

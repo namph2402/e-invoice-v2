@@ -1,0 +1,28 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.output_invoices
+    - field.storage.invoice.field_invoice_origin
+    - node.type.preorder
+id: invoice.output_invoices.field_invoice_origin
+field_name: field_invoice_origin
+entity_type: invoice
+bundle: output_invoices
+label: 'Đơn bán hàng'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:node'
+  handler_settings:
+    target_bundles:
+      preorder: preorder
+    sort:
+      field: _none
+      direction: ASC
+    auto_create: false
+    auto_create_bundle: ''
+field_type: entity_reference

@@ -1,0 +1,22 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.input_invoices
+    - field.storage.invoice.field_invoice_import
+  module:
+    - options
+id: invoice.input_invoices.field_invoice_import
+field_name: field_invoice_import
+entity_type: invoice
+bundle: input_invoices
+label: 'Invoice import'
+description: ''
+required: false
+translatable: false
+default_value:
+  -
+    value: 0
+default_value_callback: ''
+settings: {  }
+field_type: list_integer

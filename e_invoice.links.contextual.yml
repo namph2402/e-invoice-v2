@@ -1,0 +1,9 @@
+entity.invoice.edit_form:
+  route_name: entity.invoice.edit_form
+  group: invoice
+  title: "Edit"
+
+entity.invoice.delete_form:
+  route_name: entity.invoice.delete_form
+  group: invoice
+  title: "Delete"

@@ -1,0 +1,703 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.output_invoices
+    - field.field.invoice.output_invoices.field_invoice_amount
+    - field.field.invoice.output_invoices.field_invoice_amount_without_vat
+    - field.field.invoice.output_invoices.field_invoice_buyer_address
+    - field.field.invoice.output_invoices.field_invoice_buyer_legal
+    - field.field.invoice.output_invoices.field_invoice_buyer_name
+    - field.field.invoice.output_invoices.field_invoice_buyer_phone
+    - field.field.invoice.output_invoices.field_invoice_buyer_taxcode
+    - field.field.invoice.output_invoices.field_invoice_date
+    - field.field.invoice.output_invoices.field_invoice_discount_amount
+    - field.field.invoice.output_invoices.field_invoice_export
+    - field.field.invoice.output_invoices.field_invoice_id
+    - field.field.invoice.output_invoices.field_invoice_id_related
+    - field.field.invoice.output_invoices.field_invoice_is_xml
+    - field.field.invoice.output_invoices.field_invoice_issue
+    - field.field.invoice.output_invoices.field_invoice_items
+    - field.field.invoice.output_invoices.field_invoice_mccqt
+    - field.field.invoice.output_invoices.field_invoice_no
+    - field.field.invoice.output_invoices.field_invoice_pattern
+    - field.field.invoice.output_invoices.field_invoice_payment
+    - field.field.invoice.output_invoices.field_invoice_pdf
+    - field.field.invoice.output_invoices.field_invoice_refno
+    - field.field.invoice.output_invoices.field_invoice_relateds
+    - field.field.invoice.output_invoices.field_invoice_serial
+    - field.field.invoice.output_invoices.field_invoice_status
+    - field.field.invoice.output_invoices.field_invoice_status_cqt
+    - field.field.invoice.output_invoices.field_invoice_total_amount
+    - field.field.invoice.output_invoices.field_invoice_transaction
+    - field.field.invoice.output_invoices.field_invoice_vat_amount
+  module:
+    - datafield
+    - datetime
+    - field_group
+    - file
+    - input_pattern
+    - telephone
+third_party_settings:
+  field_group:
+    group_div_row:
+      children:
+        - group_div_col_left
+        - group_div_col_right
+      label: 'Div row'
+      region: content
+      parent_name: ''
+      weight: 0
+      format_type: html_element
+      format_settings:
+        classes: 'row mx-0'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_div_col_left:
+      children:
+        - group_shadow_left
+      label: 'Div col left'
+      region: content
+      parent_name: group_div_row
+      weight: 26
+      format_type: html_element
+      format_settings:
+        classes: 'col-3 px-1'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_div_col_right:
+      children:
+        - group_shadow_right
+      label: 'Div col right'
+      region: content
+      parent_name: group_div_row
+      weight: 27
+      format_type: html_element
+      format_settings:
+        classes: 'col-9 px-1'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_shadow_left:
+      children:
+        - label
+        - field_invoice_buyer_legal
+        - field_invoice_buyer_name
+        - field_invoice_buyer_phone
+        - field_invoice_buyer_taxcode
+        - field_invoice_buyer_address
+        - field_invoice_payment
+      label: 'Shadow left'
+      region: content
+      parent_name: group_div_col_left
+      weight: 28
+      format_type: html_element
+      format_settings:
+        classes: 'shadow border rounded-3 p-2'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_shadow_right:
+      children:
+        - field_invoice_items
+        - group_div_row_total
+      label: 'Shadow right'
+      region: content
+      parent_name: group_div_col_right
+      weight: 29
+      format_type: html_element
+      format_settings:
+        classes: 'shadow border rounded-3 p-2'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_div_none:
+      children:
+        - field_invoice_amount_without_vat
+        - field_invoice_status
+        - field_invoice_issue
+        - field_invoice_date
+        - field_invoice_no
+        - field_invoice_transaction
+        - field_invoice_pattern
+        - field_invoice_serial
+        - field_invoice_refno
+        - field_invoice_mccqt
+        - field_invoice_status_cqt
+        - field_invoice_pdf
+        - field_invoice_id_related
+        - field_invoice_relateds
+        - status
+      label: 'Div none'
+      region: content
+      parent_name: ''
+      weight: 1
+      format_type: html_element
+      format_settings:
+        classes: d-none
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_div_row_total:
+      children:
+        - group_div_col_1
+        - group_div_col_2
+        - group_div_col_3
+        - group_div_col_4
+      label: 'Div row total'
+      region: content
+      parent_name: group_shadow_right
+      weight: 9
+      format_type: html_element
+      format_settings:
+        classes: 'row mx-0'
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_div_col_1:
+      children:
+        - field_invoice_amount
+      label: 'Div col 1'
+      region: content
+      parent_name: group_div_row_total
+      weight: 2
+      format_type: html_element
+      format_settings:
+        classes: col-3
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_div_col_2:
+      children:
+        - field_invoice_discount_amount
+      label: 'Div col 2'
+      region: content
+      parent_name: group_div_row_total
+      weight: 3
+      format_type: html_element
+      format_settings:
+        classes: col-3
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_div_col_3:
+      children:
+        - field_invoice_vat_amount
+      label: 'Div col 3'
+      region: content
+      parent_name: group_div_row_total
+      weight: 4
+      format_type: html_element
+      format_settings:
+        classes: col-3
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+    group_div_col_4:
+      children:
+        - field_invoice_total_amount
+      label: 'Div col 4'
+      region: content
+      parent_name: group_div_row_total
+      weight: 5
+      format_type: html_element
+      format_settings:
+        classes: col-3
+        show_empty_fields: false
+        id: ''
+        label_as_html: false
+        element: div
+        show_label: false
+        label_element: h3
+        label_element_classes: ''
+        attributes: ''
+        effect: none
+        speed: fast
+        required_fields: true
+id: invoice.output_invoices.default
+targetEntityType: invoice
+bundle: output_invoices
+mode: default
+content:
+  field_invoice_amount:
+    type: input_pattern
+    weight: 2
+    region: content
+    settings:
+      type: number
+      placeholder: ''
+      separator: ''
+      maxlength: ''
+      list: ''
+      pattern: ''
+      step: ''
+      min: ''
+      max: ''
+      class: ''
+      custom: ''
+      use_auto_numeric: '1'
+    third_party_settings: {  }
+  field_invoice_amount_without_vat:
+    type: number
+    weight: 13
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_buyer_address:
+    type: string_textfield
+    weight: 6
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_buyer_legal:
+    type: string_textfield
+    weight: 2
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_buyer_name:
+    type: string_textfield
+    weight: 3
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_buyer_phone:
+    type: telephone_default
+    weight: 4
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_buyer_taxcode:
+    type: string_textfield
+    weight: 5
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_date:
+    type: datetime_default
+    weight: 16
+    region: content
+    settings: {  }
+    third_party_settings: {  }
+  field_invoice_discount_amount:
+    type: input_pattern
+    weight: 3
+    region: content
+    settings:
+      type: number
+      placeholder: ''
+      separator: ''
+      maxlength: ''
+      list: ''
+      pattern: ''
+      step: ''
+      min: ''
+      max: ''
+      class: ''
+      custom: ''
+      use_auto_numeric: '1'
+    third_party_settings: {  }
+  field_invoice_id_related:
+    type: entity_reference_autocomplete
+    weight: 25
+    region: content
+    settings:
+      match_operator: CONTAINS
+      match_limit: 10
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_issue:
+    type: boolean_checkbox
+    weight: 15
+    region: content
+    settings:
+      display_label: true
+    third_party_settings: {  }
+  field_invoice_items:
+    type: data_field_table_widget
+    weight: 8
+    region: content
+    settings:
+      inline: false
+      field_reference: ''
+      widget_settings:
+        item_id:
+          type: number
+          label_display: ''
+          size: 30
+          placeholder: ''
+          field_display: '1'
+          weight: 0
+          step: ''
+          col: ''
+        item_code:
+          type: textfield
+          label_display: ''
+          size: 30
+          placeholder: ''
+          field_display: '1'
+          weight: 0
+          step: ''
+          maxlength: ''
+          pattern: ''
+          min: ''
+          max: ''
+          list: ''
+          class: ''
+          col: ''
+        item_name:
+          type: textfield
+          label_display: ''
+          size: 30
+          placeholder: ''
+          field_display: '1'
+          weight: 0
+          step: ''
+          maxlength: ''
+          pattern: ''
+          min: ''
+          max: ''
+          list: ''
+          class: ''
+          col: '2'
+        item_unit:
+          type: textfield
+          label_display: ''
+          size: 30
+          placeholder: ''
+          field_display: '1'
+          weight: 0
+          step: ''
+          maxlength: ''
+          pattern: ''
+          min: ''
+          max: ''
+          list: ''
+          class: ''
+          col: ''
+        item_quantity:
+          type: input_pattern_number
+          label_display: ''
+          size: 30
+          placeholder: ''
+          field_display: '1'
+          weight: 0
+          step: '3'
+          col: ''
+        item_price:
+          type: input_pattern_number
+          label_display: ''
+          size: 30
+          placeholder: 'Please type'
+          field_display: '1'
+          weight: 0
+          step: '3'
+          col: ''
+        item_amount:
+          type: number
+          label_display: ''
+          size: 30
+          placeholder: 'Please type'
+          field_display: '1'
+          weight: 0
+          step: '2'
+          col: ''
+        item_discount_rate:
+          type: textfield
+          label_display: ''
+          size: 30
+          placeholder: ''
+          field_display: '1'
+          weight: 0
+          step: ''
+          maxlength: ''
+          pattern: ''
+          min: ''
+          max: ''
+          list: ''
+          class: ''
+          col: ''
+        item_discount_amount:
+          type: number
+          label_display: ''
+          size: 30
+          placeholder: 'Please type'
+          field_display: '1'
+          weight: 0
+          step: '2'
+          col: ''
+        item_amount_without_vat:
+          type: number
+          label_display: ''
+          size: 30
+          placeholder: 'Please type'
+          field_display: '1'
+          weight: 0
+          step: '2'
+          col: ''
+        item_vat_rate:
+          type: number
+          label_display: ''
+          size: 30
+          placeholder: 'Please type'
+          field_display: '1'
+          weight: 0
+          step: '3'
+          col: ''
+        item_vat_amount:
+          type: number
+          label_display: ''
+          size: 30
+          placeholder: 'Please type'
+          field_display: '1'
+          weight: 0
+          step: '2'
+          col: ''
+        item_total_amount:
+          type: input_pattern_number
+          label_display: ''
+          size: 30
+          placeholder: 'Please type'
+          field_display: '1'
+          weight: 0
+          step: '3'
+          col: ''
+        item_type:
+          type: select
+          label_display: ''
+          field_display: '1'
+          weight: 0
+          col: ''
+        item_exist:
+          type: select
+          label_display: ''
+          field_display: '1'
+          weight: 0
+          col: ''
+    third_party_settings: {  }
+  field_invoice_mccqt:
+    type: string_textfield
+    weight: 22
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_no:
+    type: string_textfield
+    weight: 17
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_pattern:
+    type: string_textfield
+    weight: 19
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_payment:
+    type: options_select
+    weight: 7
+    region: content
+    settings: {  }
+    third_party_settings: {  }
+  field_invoice_pdf:
+    type: file_generic
+    weight: 24
+    region: content
+    settings:
+      progress_indicator: throbber
+    third_party_settings: {  }
+  field_invoice_refno:
+    type: string_textfield
+    weight: 21
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_relateds:
+    type: string_textfield
+    weight: 26
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_serial:
+    type: string_textfield
+    weight: 20
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_status:
+    type: options_select
+    weight: 14
+    region: content
+    settings: {  }
+    third_party_settings: {  }
+  field_invoice_status_cqt:
+    type: options_select
+    weight: 23
+    region: content
+    settings: {  }
+    third_party_settings: {  }
+  field_invoice_total_amount:
+    type: input_pattern
+    weight: 5
+    region: content
+    settings:
+      type: number
+      placeholder: ''
+      separator: ''
+      maxlength: ''
+      list: ''
+      pattern: ''
+      step: ''
+      min: ''
+      max: ''
+      class: ''
+      custom: ''
+      use_auto_numeric: '1'
+    third_party_settings: {  }
+  field_invoice_transaction:
+    type: string_textfield
+    weight: 18
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_vat_amount:
+    type: input_pattern
+    weight: 4
+    region: content
+    settings:
+      type: number
+      placeholder: ''
+      separator: ''
+      maxlength: ''
+      list: ''
+      pattern: ''
+      step: ''
+      min: ''
+      max: ''
+      class: ''
+      custom: ''
+      use_auto_numeric: '1'
+    third_party_settings: {  }
+  label:
+    type: string_textfield
+    weight: 1
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+hidden:
+  created: true
+  description: true
+  field_invoice_export: true
+  field_invoice_id: true
+  field_invoice_is_xml: true
+  status: true
+  uid: true

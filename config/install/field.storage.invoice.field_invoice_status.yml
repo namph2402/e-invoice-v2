@@ -1,0 +1,44 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+    - options
+id: invoice.field_invoice_status
+field_name: field_invoice_status
+entity_type: invoice
+type: list_integer
+settings:
+  allowed_values:
+    -
+      value: 0
+      label: 'HĐ bản thảo'
+    -
+      value: 1
+      label: 'HĐ gốc'
+    -
+      value: 2
+      label: 'HĐ thay thế'
+    -
+      value: 3
+      label: 'HĐ điều chỉnh'
+    -
+      value: 4
+      label: 'HĐ đã bị thay thế'
+    -
+      value: 5
+      label: 'HĐ đã bị điều chỉnh'
+    -
+      value: 6
+      label: 'HĐ đã bị xóa bỏ/hủy bỏ'
+    -
+      value: 7
+      label: 'HĐ chưa xác định'
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

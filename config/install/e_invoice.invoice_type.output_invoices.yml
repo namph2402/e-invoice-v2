@@ -1,0 +1,5 @@
+langcode: en
+status: true
+dependencies: {  }
+id: output_invoices
+label: 'Output invoices'

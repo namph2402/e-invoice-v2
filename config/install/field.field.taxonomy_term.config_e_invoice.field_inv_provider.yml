@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.taxonomy_term.field_inv_provider
+    - taxonomy.vocabulary.config_e_invoice
+  module:
+    - options
+id: taxonomy_term.config_e_invoice.field_inv_provider
+field_name: field_inv_provider
+entity_type: taxonomy_term
+bundle: config_e_invoice
+label: Provider
+description: ''
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: list_string

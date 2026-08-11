@@ -1,0 +1,18 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+id: invoice.field_invoice_id_related
+field_name: field_invoice_id_related
+entity_type: invoice
+type: entity_reference
+settings:
+  target_type: invoice
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

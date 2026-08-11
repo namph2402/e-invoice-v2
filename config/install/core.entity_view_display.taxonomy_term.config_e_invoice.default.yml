@@ -1,0 +1,163 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.taxonomy_term.config_e_invoice.field_inv_appid
+    - field.field.taxonomy_term.config_e_invoice.field_inv_appurl
+    - field.field.taxonomy_term.config_e_invoice.field_inv_client
+    - field.field.taxonomy_term.config_e_invoice.field_inv_expiration
+    - field.field.taxonomy_term.config_e_invoice.field_inv_host
+    - field.field.taxonomy_term.config_e_invoice.field_inv_jwt_token
+    - field.field.taxonomy_term.config_e_invoice.field_inv_organization
+    - field.field.taxonomy_term.config_e_invoice.field_inv_password
+    - field.field.taxonomy_term.config_e_invoice.field_inv_provider
+    - field.field.taxonomy_term.config_e_invoice.field_inv_subscribers
+    - field.field.taxonomy_term.config_e_invoice.field_inv_taxcode
+    - field.field.taxonomy_term.config_e_invoice.field_inv_templates
+    - field.field.taxonomy_term.config_e_invoice.field_inv_token
+    - field.field.taxonomy_term.config_e_invoice.field_inv_username
+    - taxonomy.vocabulary.config_e_invoice
+  module:
+    - datafield
+    - datetime
+    - link
+    - options
+id: taxonomy_term.config_e_invoice.default
+targetEntityType: taxonomy_term
+bundle: config_e_invoice
+mode: default
+content:
+  field_inv_appid:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 7
+    region: content
+  field_inv_appurl:
+    type: link
+    label: above
+    settings:
+      trim_length: 80
+      url_only: false
+      url_plain: false
+      rel: ''
+      target: ''
+    third_party_settings: {  }
+    weight: 8
+    region: content
+  field_inv_client:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 9
+    region: content
+  field_inv_expiration:
+    type: datetime_default
+    label: above
+    settings:
+      timezone_override: ''
+      format_type: medium
+    third_party_settings: {  }
+    weight: 10
+    region: content
+  field_inv_host:
+    type: link
+    label: above
+    settings:
+      trim_length: 80
+      url_only: false
+      url_plain: false
+      rel: ''
+      target: ''
+    third_party_settings: {  }
+    weight: 2
+    region: content
+  field_inv_password:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 4
+    region: content
+  field_inv_provider:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 1
+    region: content
+  field_inv_taxcode:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 5
+    region: content
+  field_inv_templates:
+    type: data_field_table_formatter
+    label: above
+    settings:
+      number_column: false
+      number_column_label: №
+      direction: horizontal
+      mode: table
+      caption: ''
+      footer_text: ''
+      datatables_options:
+        bExpandable: true
+        bInfo: true
+        scrollX: true
+        bStateSave: false
+        paging: true
+        ordering: true
+        searching: true
+        show-export: true
+        bMultiFilter: false
+      bootstrap_table_options:
+        sticky-header: true
+        search: true
+        show-search-clear-button: true
+        show-refresh: true
+        show-toggle: true
+        show-fullscreen: true
+        show-columns: true
+        data-detail-view: true
+        show-columns-toggle-all: true
+        mobile-responsive: true
+        show-print: true
+        show-copy-rows: true
+        show-export: true
+        sortable: true
+        click-to-select: true
+        show-pagination-switch: true
+        pagination: true
+        cookie: true
+        show-footer: false
+      formatter_settings: {  }
+      ajax: false
+      custom_class: ''
+      line_operations: false
+      form_format_table: false
+    third_party_settings: {  }
+    weight: 6
+    region: content
+  field_inv_username:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 3
+    region: content
+hidden:
+  description: true
+  field_inv_jwt_token: true
+  field_inv_organization: true
+  field_inv_subscribers: true
+  field_inv_token: true

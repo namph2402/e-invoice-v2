@@ -1,0 +1,18 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.taxonomy_term.field_inv_taxcode
+    - taxonomy.vocabulary.config_e_invoice
+id: taxonomy_term.config_e_invoice.field_inv_taxcode
+field_name: field_inv_taxcode
+entity_type: taxonomy_term
+bundle: config_e_invoice
+label: 'Tax code'
+description: ''
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

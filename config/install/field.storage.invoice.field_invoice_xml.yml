@@ -1,0 +1,22 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+    - file
+id: invoice.field_invoice_xml
+field_name: field_invoice_xml
+entity_type: invoice
+type: file
+settings:
+  target_type: file
+  display_field: false
+  display_default: false
+  uri_scheme: public
+module: file
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

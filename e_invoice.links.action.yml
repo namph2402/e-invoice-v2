@@ -1,0 +1,17 @@
+invoice.add_page:
+  title: "Add invoice"
+  route_name: entity.invoice.add_page
+  appears_on:
+    - entity.invoice.collection
+
+e_invoice.add_form:
+  title: "Add invoice"
+  route_name: entity.invoice.add_form
+  appears_on:
+    - entity.invoice.collection
+
+invoice.type_add:
+  title: "Add invoice type"
+  route_name: entity.invoice_type.add_form
+  appears_on:
+    - entity.invoice_type.collection

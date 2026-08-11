@@ -1,0 +1,18 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.input_invoices
+    - field.storage.invoice.field_invoice_seller_name
+id: invoice.input_invoices.field_invoice_seller_name
+field_name: field_invoice_seller_name
+entity_type: invoice
+bundle: input_invoices
+label: 'Invoice seller name'
+description: ''
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

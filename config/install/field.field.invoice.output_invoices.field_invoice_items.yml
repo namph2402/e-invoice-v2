@@ -1,0 +1,147 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.output_invoices
+    - field.storage.invoice.field_invoice_items
+  module:
+    - datafield
+id: invoice.output_invoices.field_invoice_items
+field_name: field_invoice_items
+entity_type: invoice
+bundle: output_invoices
+label: 'Invoice items'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  field_settings:
+    item_id:
+      label: 'Inv id'
+      list: false
+      allowed_values: ''
+      max: null
+      min: null
+      required: false
+      prefix: ''
+      suffix: ''
+    item_code:
+      label: 'Inv code'
+      list: false
+      allowed_values: ''
+      required: false
+    item_name:
+      label: 'Inv name'
+      list: false
+      allowed_values: ''
+      required: false
+    item_unit:
+      label: 'Inv unit'
+      list: false
+      allowed_values: ''
+      required: false
+    item_quantity:
+      label: 'Inv quantity'
+      list: false
+      allowed_values: ''
+      max: null
+      min: null
+      required: false
+      prefix: ''
+      suffix: ''
+    item_price:
+      label: 'Inv price'
+      list: false
+      allowed_values: ''
+      max: null
+      min: null
+      required: false
+      prefix: ''
+      suffix: ''
+    item_amount:
+      label: 'Inv amount'
+      list: false
+      allowed_values: ''
+      max: null
+      min: null
+      required: false
+      prefix: ''
+      suffix: ''
+    item_discount_rate:
+      label: 'Inv discount rate'
+      list: false
+      allowed_values: ''
+      required: false
+    item_discount_amount:
+      label: 'Inv discount amount'
+      list: false
+      allowed_values: ''
+      max: null
+      min: null
+      required: false
+      prefix: ''
+      suffix: ''
+    item_amount_without_vat:
+      label: 'Inv amount without vat'
+      list: false
+      allowed_values: ''
+      max: null
+      min: null
+      required: false
+      prefix: ''
+      suffix: ''
+    item_vat_rate:
+      label: 'Inv vat rate'
+      list: false
+      allowed_values: ''
+      max: null
+      min: null
+      required: false
+      prefix: ''
+      suffix: ''
+    item_vat_amount:
+      label: 'Inv vat amount'
+      list: false
+      allowed_values: ''
+      max: null
+      min: null
+      required: false
+      prefix: ''
+      suffix: ''
+    item_total_amount:
+      label: 'Inv total amount'
+      list: false
+      allowed_values: ''
+      max: null
+      min: null
+      required: false
+      prefix: ''
+      suffix: ''
+    item_type:
+      label: 'Inv type'
+      list: true
+      allowed_values:
+        -
+          label: 'Hàng hóa/dịch vụ'
+          value: '1'
+        -
+          label: 'Khuyến mại'
+          value: '2'
+        -
+          label: 'Ghi chú/diễn giải'
+          value: '3'
+        -
+          label: 'Chiết khấu thương mại'
+          value: '4'
+        -
+          label: 'Hàng hóa đặc thù'
+          value: '6'
+      required: false
+    item_exist:
+      label: 'Inv exist'
+      list: false
+      allowed_values: ''
+      required: false
+field_type: data_field

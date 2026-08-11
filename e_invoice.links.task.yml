@@ -1,0 +1,30 @@
+entity.invoice.collection:
+  title: "Invoices"
+  route_name: entity.invoice.collection
+  base_route: system.admin_content
+
+entity.invoice.view:
+  title: "View"
+  route_name: entity.invoice.canonical
+  base_route: entity.invoice.canonical
+
+entity.invoice.edit_form:
+  title: "Edit"
+  route_name: entity.invoice.edit_form
+  base_route: entity.invoice.canonical
+
+entity.invoice.delete_form:
+  title: "Delete"
+  route_name: entity.invoice.delete_form
+  base_route: entity.invoice.canonical
+
+entity.invoice_type.collection:
+  title: "List"
+  route_name: entity.invoice_type.collection
+  base_route: entity.invoice_type.collection
+
+entity.invoice_type.edit_form:
+  title: "Edit"
+  route_name: entity.invoice_type.edit_form
+  base_route: entity.invoice_type.edit_form
+

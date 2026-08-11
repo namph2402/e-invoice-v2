@@ -1,0 +1,15 @@
+e_invoice.replace:
+  path: '/invoice-uuid/{uuid}/replace'
+  defaults:
+    _title: 'Replace invoice'
+    _controller: '\Drupal\e_invoice\Controller\InvoiceController::formReplace'
+  requirements:
+    _permission: "administer invoice"
+
+e_invoice.duplicate:
+  path: '/invoice-uuid/{uuid}/duplicate'
+  defaults:
+    _title: 'Duplicate invoice'
+    _controller: '\Drupal\e_invoice\Controller\InvoiceController::formDuplicate'
+  requirements:
+    _permission: "administer invoice"

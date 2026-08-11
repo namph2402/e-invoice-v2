@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+id: invoice.field_invoice_no
+field_name: field_invoice_no
+entity_type: invoice
+type: string
+settings:
+  max_length: 255
+  case_sensitive: false
+  is_ascii: false
+module: core
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false
