@@ -52,7 +52,6 @@ class GetConfigInvoice {
 
       if ($refreshed !== NULL) {
         $config = $refreshed;
-
         $config_entity->skip_call_token = TRUE;
         $config_entity->save();
       }
@@ -89,7 +88,7 @@ class GetConfigInvoice {
    * Term không được lưu ở đây, chỗ gọi tự quyết định (hook presave chỉ cần gán,
    * còn ::handle() thì phải gọi save).
    *
-   * @param \Drupal\taxonomy\TermInterface $config_entity
+   * @param TermInterface $config_entity
    *   Term cấu hình sẽ được gán token mới.
    * @param array|null $config
    *   Cấu hình đã đọc sẵn, để trống thì tự đọc lại từ term.
