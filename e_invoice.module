@@ -34,7 +34,7 @@ function template_preprocess_invoice(array &$variables): void {
     $variables["content"][$key] = $variables["elements"][$key];
   }
 }
-
+ 
 /**
  * Implements hook_entity_presave().
  */
@@ -61,6 +61,5 @@ function e_invoice_entity_presave(EntityInterface $entity) {
     return;
   }
 
-  // Chỉ gán field, không save vì đang ở presave.
   $config_service->refreshToken($translation, $config);
 }

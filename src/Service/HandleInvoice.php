@@ -2,330 +2,335 @@
 
 namespace Drupal\e_invoice\Service;
 
-use Psr\Log\LoggerInterface;
-use Drupal\Core\File\FileSystemInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\EntityStorageInterface;
+use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Entity\EntityStorageInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\File\FileExists;
+use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Utility\Token;
-use Drupal\file\FileRepositoryInterface;
-use Drupal\e_invoice\InvoiceProvidersPluginManager;
+use Drupal\e_invoice\Exception\InvoiceTokenException;
 use Drupal\e_invoice\InvoiceInterface;
+use Drupal\e_invoice\InvoiceProvidersInterface;
+use Drupal\e_invoice\InvoiceProvidersPluginManager;
+use Drupal\file\FileRepositoryInterface;
+use Psr\Log\LoggerInterface;
 
 /**
- * Invoice get config invoice.
+ * Điều phối các thao tác hóa đơn giữa entity invoice và nhà cung cấp.
+ *
+ * Mọi phương thức công khai đều trả mảng có khoá "success"; lỗi nghiệp vụ nằm ở
+ * "message" thay vì ném ngoại lệ, để controller hiển thị thẳng cho người dùng.
  */
 class HandleInvoice {
+
+  /**
+   * Bundle của hóa đơn đầu vào.
+   */
+  private const BUNDLE_IN = "input_invoices";
+
+  /**
+   * Bundle của hóa đơn đầu ra.
+   */
+  private const BUNDLE_OUT = "output_invoices";
+
+  /**
+   * Trạng thái "HĐ đã bị thay thế".
+   */
+  private const STATUS_REPLACED = 4;
+
+  /**
+   * Trạng thái "HĐ đã bị xóa bỏ/hủy bỏ".
+   */
+  private const STATUS_CANCELLED = 6;
 
   /**
    * {@inheritdoc}
    */
   public function __construct(
     protected InvoiceProvidersPluginManager $providers,
+    protected GetConfigInvoice $configService,
     protected EntityTypeManagerInterface $entityTypeManager,
     protected EntityFieldManagerInterface $entityFieldManager,
     protected FileSystemInterface $fileSystem,
     protected FileRepositoryInterface $fileRepository,
+    protected Connection $database,
     protected LoggerInterface $logger,
     protected Token $token,
+    protected TimeInterface $time,
   ) {}
 
   /**
-   * Lấy token.
+   * Xem trước PDF hóa đơn chưa phát hành.
+   *
+   * @param array $config
+   *   Cấu hình kết nối, kèm khoá "invoice_template".
+   * @param array $data
+   *   Dữ liệu hóa đơn, đánh khoá theo uuid.
+   *
+   * @return array
+   *   Phản hồi nhà cung cấp, khoá "data" là đường dẫn xem trước.
    */
-  public function getToken(array $config): array {
-    try {
-      $provider = $this->getProvider($config);
-      $data = $provider->authenticate($config);
-
-      return [
-        "success" => TRUE,
-        "data" => $data,
-      ];
-    }
-    catch (\DomainException $e) {
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error(
-        "Invoice system error: @message",
-        ["@message" => $e->getMessage(), "exception" => $e]
+  public function previewInvoice(array $config, array $data): array {
+    return $this->guard(function () use ($config, $data) {
+      $result = $this->call(
+        $config,
+        fn (InvoiceProvidersInterface $provider, array $config) => $provider->preview($config, $data)
       );
 
-      return [
-        "success" => FALSE,
-        "message" => "The system is experiencing problems",
-      ];
-    }
-  }
-
-  /**
-   * Phát hành hóa đơn.
-   */
-  public function issueInvoice(array $entity, array $config, array $data, array $params = []): array {
-    try {
-      $isError = FALSE;
-      $provider = $this->getProvider($config);
-      $results = $provider->issue($config, $data);
-
-      foreach ($results as $result) {
-
-        if (!empty($result["ErrorCode"])) {
-          $isError = TRUE;
-          continue;
-        }
-
-        $date = new \DateTime('now', new \DateTimeZone('UTC'));
-
-        $fields = [
-          "field_invoice_issue" => 1,
-          "field_invoice_status" => 1,
-          "field_invoice_no" => $result["InvNo"],
-          "field_invoice_refno" => $result["RefID"],
-          "field_invoice_pattern" => $result["InvTemplateNo"],
-          "field_invoice_serial" => $result["InvSeries"],
-          "field_invoice_transaction" => $result["TransactionID"],
-          "field_invoice_mccqt" => $result["InvCode"],
-          "field_invoice_date" => $date->format('Y-m-d\TH:i:s'),
-        ];
-
-        $fields += $params;
-        $this->updateOutInvoice($entity[$result["RefID"]], $fields);
-      }
-
-      if ($isError) {
+      if (empty($result["data"])) {
         return [
           "success" => FALSE,
-          "message" => "Invoice issuance failed",
+          "message" => "Nhà cung cấp không trả về bản xem trước",
         ];
       }
 
-      return [
-        "success" => TRUE,
-      ];
-    }
-    catch (\DomainException $e) {
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error(
-        "Invoice system error: @message",
-        ["@message" => $e->getMessage(), "exception" => $e]
-      );
-
-      return [
-        "success" => FALSE,
-        "message" => "The system is experiencing problems",
-      ];
-    }
+      return array_merge($result, ["success" => TRUE]);
+    });
   }
 
   /**
-   * Thay thế hóa đơn.
+   * Phát hành hóa đơn đầu ra.
+   *
+   * @param array $invoices
+   *   Entity hóa đơn, đánh khoá theo uuid.
+   * @param array $config
+   *   Cấu hình kết nối, kèm khoá "invoice_template".
+   * @param array $data
+   *   Dữ liệu phát hành, đánh khoá theo uuid.
+   * @param bool $get_file
+   *   TRUE để tải kèm PDF ngay sau khi phát hành.
+   *
+   * @return array
+   *   Gồm "success", "issued" (entity đã phát hành) và "errors".
    */
-  public function replaceInvoice(array $entity, array $config, array $data, array $params = []): array {
-    try {
-      $isError = FALSE;
-      $list_old_invoice = [];
-      $provider = $this->getProvider($config);
+  public function issueInvoice(array $invoices, array $config, array $data, bool $get_file = FALSE): array {
+    return $this->guard(function () use ($invoices, $config, $data, $get_file) {
+      $results = $this->call(
+        $config,
+        fn (InvoiceProvidersInterface $provider, array $config) => $provider->issue($config, $data, $get_file)
+      );
 
-      foreach ($data as &$item) {
-        $invoice = $entity[$item["invoice_uuid"]];
+      return $this->applyPublishResults($invoices, $results, [
+        "field_invoice_status" => 1,
+      ]);
+    });
+  }
 
-        /** @var InvoiceInterface $old_invoice */
-        $old_invoice = $invoice->get("field_invoice_id_related")->entity;
+  /**
+   * Phát hành hóa đơn thay thế.
+   *
+   * @param array $invoices
+   *   Entity hóa đơn thay thế, đánh khoá theo uuid.
+   * @param array $config
+   *   Cấu hình kết nối, kèm khoá "invoice_template".
+   * @param array $data
+   *   Dữ liệu phát hành, đánh khoá theo uuid.
+   * @param bool $get_file
+   *   TRUE để tải kèm PDF ngay sau khi phát hành.
+   *
+   * @return array
+   *   Gồm "success", "issued" và "errors".
+   */
+  public function replaceInvoice(array $invoices, array $config, array $data, bool $get_file = TRUE): array {
+    return $this->guard(function () use ($invoices, $config, $data, $get_file) {
+      $originals = [];
 
-        if (!$old_invoice || $old_invoice->get("field_invoice_status")->value == 5) {
+      // Gắn thông tin hóa đơn gốc trước khi gọi API: thiếu một hóa đơn gốc hợp
+      // lệ là hỏng cả lô, dừng sớm hơn là phát hành nửa vời.
+      foreach ($data as $uuid => $item) {
+        $invoice = $invoices[$uuid] ?? NULL;
+
+        if (!$invoice instanceof InvoiceInterface) {
+          return [
+            "success" => FALSE,
+            "message" => "Không tìm thấy hóa đơn cần thay thế",
+          ];
+        }
+
+        /** @var InvoiceInterface|null $original */
+        $original = $invoice->get("field_invoice_id_related")->entity;
+
+        if (!$original instanceof InvoiceInterface) {
           return [
             "success" => FALSE,
             "message" => "The replaced invoice is invalid.",
           ];
         }
 
-        $item["replace"] = [
-          "invoice_no" => $old_invoice->get("field_invoice_no")->value ?? "",
-          "invoice_template_no" => $old_invoice->get("field_invoice_pattern")->value ?? "1",
-          "invoice_template_series" => $old_invoice->get("field_invoice_serial")->value
-            ? substr($old_invoice->get("field_invoice_serial")->value, 1)
-            : "",
-        ];
+        $status = (int) $original->get("field_invoice_status")->value;
 
-        $list_old_invoice[$item["invoice_uuid"]] = $old_invoice;
-      }
-
-      $results = $provider->replace($config, $data);
-
-      foreach ($results as $result) {
-
-        if (!empty($result["ErrorCode"])) {
-          $isError = TRUE;
-          continue;
+        if (in_array($status, [self::STATUS_REPLACED, self::STATUS_CANCELLED], TRUE)) {
+          return [
+            "success" => FALSE,
+            "message" => "The replaced invoice is invalid.",
+          ];
         }
 
-        $fields = [
-          "field_invoice_issue" => 1,
-          "field_invoice_no" => $result["InvNo"],
-          "field_invoice_refno" => $result["RefID"],
-          "field_invoice_pattern" => $result["InvTemplateNo"],
-          "field_invoice_serial" => $result["InvSeries"],
-          "field_invoice_transaction" => $result["TransactionID"],
-          "field_invoice_mccqt" => $result["InvCode"],
-        ];
-
-        $fields += $params;
-
-        $this->updateOutInvoice($entity[$result["RefID"]], $fields);
-        $this->updateOutInvoice($list_old_invoice[$result["RefID"]], ["field_invoice_status" => 4]);
+        $data[$uuid]["replace"] = $this->buildOriginalReference($original);
+        $originals[$uuid] = $original;
       }
 
-      if ($isError) {
-        return [
-          "success" => FALSE,
-          "message" => "Replace issuance failed",
-        ];
-      }
-
-      return [
-        "success" => TRUE,
-      ];
-    }
-    catch (\DomainException $e) {
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error(
-        "Invoice system error: @message",
-        ["@message" => $e->getMessage(), "exception" => $e]
+      $results = $this->call(
+        $config,
+        fn (InvoiceProvidersInterface $provider, array $config) => $provider->replace($config, $data, $get_file)
       );
 
-      return [
-        "success" => FALSE,
-        "message" => "The system is experiencing problems",
-      ];
-    }
+      $outcome = $this->applyPublishResults($invoices, $results, [
+        "field_invoice_status" => 2,
+      ]);
+
+      // Chỉ đánh dấu hóa đơn gốc là đã bị thay thế khi bản thay thế phát hành
+      // thành công.
+      foreach ($outcome["issued"] as $uuid => $invoice) {
+        if (isset($originals[$uuid])) {
+          $this->updateInvoice($originals[$uuid], [
+            "field_invoice_status" => self::STATUS_REPLACED,
+          ]);
+        }
+      }
+
+      return $outcome;
+    });
   }
 
   /**
-   * Trạng thái hóa đơn.
+   * Cập nhật trạng thái các hóa đơn đã phát hành.
+   *
+   * @param array $invoices
+   *   Entity hóa đơn đầu ra.
+   * @param array $config
+   *   Cấu hình kết nối.
+   * @param array $params
+   *   Tham số bổ sung "calcu", "withCode".
+   *
+   * @return array
+   *   Kết quả xử lý.
    */
-  public function statusInvoice(array $data, array $params = []): array {
-    try {
-      $isError = FALSE;
-      $tranID = $list_invoice = [];
-      $config = $data["config"];
+  public function statusInvoice(array $invoices, array $config, array $params = []): array {
+    return $this->guard(function () use ($invoices, $config, $params) {
+      $by_transaction = $this->indexByTransaction($invoices);
 
-      $provider = $this->getProvider($config);
-
-      foreach ($data["invoices"] as $invoice) {
-        if ($tran = $invoice->get("field_invoice_transaction")->value) {
-          $tranID[] = $tran;
-          $list_invoice[$tran] = $invoice;
-        }
-      }
-
-      if (empty($tranID)) {
+      if (empty($by_transaction)) {
         return [
           "success" => FALSE,
           "message" => "Not found transaction ID.",
         ];
       }
 
-      $results = $provider->status($config, $tranID, $params);
+      $results = $this->call(
+        $config,
+        fn (InvoiceProvidersInterface $provider, array $config) => $provider->status(
+          $config,
+          array_keys($by_transaction),
+          $params
+        )
+      );
 
-      foreach ($results as $result) {
-        if (empty($result["TransactionID"])) {
-          $isError = TRUE;
+      $updated = 0;
+
+      foreach ($results as $transaction => $result) {
+        $invoice = $by_transaction[$transaction] ?? NULL;
+
+        if (!$invoice instanceof InvoiceInterface) {
           continue;
         }
 
-        $date = new \DateTime($result["PublishedTime"]);
-        $date->setTimezone(new \DateTimeZone('UTC'));
+        $fields = [];
 
-        $fields = [
-          "field_invoice_mccqt" => $result["InvoiceCode"],
-          "field_invoice_status_cqt" => $result["SendTaxStatus"],
-          "field_invoice_date" => $date->format('Y-m-d\TH:i:s'),
-        ];
+        if (isset($result["InvoiceCode"])) {
+          $fields["field_invoice_mccqt"] = $result["InvoiceCode"];
+        }
 
-        $this->updateOutInvoice($list_invoice[$result["TransactionID"]], $fields);
+        if (!empty($result["InvNo"])) {
+          $fields["field_invoice_no"] = $result["InvNo"];
+        }
+
+        if (isset($result["SendTaxStatus"])) {
+          // Danh sách giá trị cho phép của field chỉ tới 4, giá trị lạ sẽ làm
+          // hỏng cả lần lưu.
+          $cqt = (int) $result["SendTaxStatus"];
+          $fields["field_invoice_status_cqt"] = ($cqt >= 0 && $cqt <= 4) ? $cqt : 0;
+        }
+
+        // Trạng thái hóa đơn bên MISA đánh số khác hệ thống này, phải ánh xạ
+        // thì mới biết hóa đơn đã bị hủy hay bị thay thế.
+        if (isset($result["EInvoiceStatus"])) {
+          $status = $this->mapEInvoiceStatus((int) $result["EInvoiceStatus"]);
+
+          if ($status !== NULL) {
+            $fields["field_invoice_status"] = $status;
+          }
+        }
+
+        if (!empty($result["PublishedTime"])) {
+          $published = $this->toUtc($result["PublishedTime"]);
+
+          if ($published !== NULL) {
+            $fields["field_invoice_date"] = $published;
+          }
+        }
+
+        if ($fields !== []) {
+          $this->updateInvoice($invoice, $fields);
+          $updated++;
+        }
       }
 
-      if ($isError) {
+      if ($updated === 0) {
         return [
           "success" => FALSE,
           "message" => "Invoice status failed",
         ];
       }
 
-      return [
-        "success" => TRUE,
-      ];
-    }
-    catch (\DomainException $e) {
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error(
-        "Invoice system error: @message",
-        ["@message" => $e->getMessage(), "exception" => $e]
-      );
-
-      return [
-        "success" => FALSE,
-        "message" => "The system is experiencing problems",
-      ];
-    }
+      return ["success" => TRUE];
+    });
   }
 
   /**
-   * Tải file PDF hóa đơn đầu ra.
+   * Tải và lưu PDF của hóa đơn đầu ra.
+   *
+   * @param array $invoices
+   *   Entity hóa đơn đầu ra.
+   * @param array $config
+   *   Cấu hình kết nối.
+   *
+   * @return array
+   *   Kết quả xử lý.
    */
-  public function pdfOutputInvoice(array $data): array {
-    try {
-      $isError = FALSE;
-      $tranID = $list_invoice = [];
-      $config = $data["config"];
+  public function pdfOutputInvoice(array $invoices, array $config): array {
+    return $this->guard(function () use ($invoices, $config) {
+      $by_transaction = $this->indexByTransaction($invoices);
 
-      foreach ($data["invoices"] as $invoice) {
-        if ($tran = $invoice->get("field_invoice_transaction")->value) {
-          $tranID[] = $tran;
-          $list_invoice[$tran] = $invoice;
+      if (empty($by_transaction)) {
+        return [
+          "success" => FALSE,
+          "message" => "Not found transaction ID.",
+        ];
+      }
+
+      $files = $this->call(
+        $config,
+        fn (InvoiceProvidersInterface $provider, array $config) => $provider->pdf(
+          $config,
+          array_keys($by_transaction)
+        )
+      );
+
+      $saved = 0;
+
+      foreach ($files as $transaction => $file) {
+        $invoice = $by_transaction[$transaction] ?? NULL;
+
+        if ($invoice instanceof InvoiceInterface
+          && $this->attachPdf($invoice, $file["Data"] ?? "", $transaction)) {
+          $saved++;
         }
       }
 
-      $provider = $this->getProvider($config);
-      $results = $provider->pdf($config, $tranID);
-
-      foreach ($results as $result) {
-        if (empty($result["TransactionID"]) || empty($result["Data"])) {
-          $isError = TRUE;
-          continue;
-        }
-
-        $pdf = $this->savePdf($result);
-        if ($pdf["success"]) {
-          $fields["field_invoice_pdf"] = [
-            "target_id" => $pdf["data"]['fid'],
-            "display" => 1,
-          ];
-
-          $this->updateOutInvoice($list_invoice[$result["TransactionID"]], $fields);
-        }
-      }
-
-      if ($isError) {
+      if ($saved === 0) {
         return [
           "success" => FALSE,
           "message" => "Invoice pdf failed",
@@ -334,184 +339,387 @@ class HandleInvoice {
 
       return [
         "success" => TRUE,
+        "message" => $saved < count($by_transaction)
+          ? "Một số hóa đơn chưa có file PDF, thử lại sau ít phút."
+          : NULL,
       ];
-    }
-    catch (\DomainException $e) {
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error(
-        "Invoice system error: @message",
-        ["@message" => $e->getMessage(), "exception" => $e]
-      );
-
-      return [
-        "success" => FALSE,
-        "message" => "The system is experiencing problems",
-      ];
-    }
+    });
   }
 
   /**
-   * Kéo hóa đơn đầu vào.
+   * Kéo hóa đơn đầu vào từ nhà cung cấp và tạo entity.
+   *
+   * @param array $config
+   *   Cấu hình kết nối.
+   * @param array $params
+   *   Bộ lọc "from", "to", "skip".
+   * @param array $fields
+   *   Field gán thêm cho mọi hóa đơn tạo mới, ví dụ công ty.
+   *
+   * @return array
+   *   Gồm "success" và "data" (entity vừa tạo).
    */
   public function modifiedInvoice(array $config, array $params, array $fields = []): array {
-    try {
-      $data = [];
+    return $this->guard(function () use ($config, $params, $fields) {
+      $result = $this->call(
+        $config,
+        fn (InvoiceProvidersInterface $provider, array $config) => $provider->modified($config, $params)
+      );
+
+      $existing = $this->findExistingInvoiceIds(array_column($result, "field_invoice_id"));
       $storage = $this->entityTypeManager->getStorage("invoice");
-      $provider = $this->getProvider($config);
-      $result = $provider->modified($config, $params);
-      $field_invoice_ids = $this->checkInvoiceIssues($params);
+      $data = [];
 
       foreach ($result as $item) {
-        if (in_array($item["field_invoice_id"], $field_invoice_ids, TRUE)) {
+        $invoice_id = (string) ($item["field_invoice_id"] ?? "");
+
+        if ($invoice_id === "" || isset($existing[$invoice_id])) {
           continue;
         }
 
-        $invoice = $this->createInInvoice($storage, $item, $fields);
-        $data[] = $invoice;
+        $existing[$invoice_id] = TRUE;
+        $data[] = $this->createInputInvoice($storage, $item, $fields);
       }
 
       return [
         "success" => TRUE,
         "data" => $data,
       ];
-    }
-    catch (\DomainException $e) {
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error(
-        "Invoice system error: @message",
-        ["@message" => $e->getMessage(), "exception" => $e]
-      );
-
-      return [
-        "success" => FALSE,
-        "message" => "The system is experiencing problems",
-      ];
-    }
+    });
   }
 
   /**
-   * Hạch toán hóa đơn.
+   * Hạch toán hóa đơn đầu vào.
+   *
+   * @param array $invoices
+   *   Entity hóa đơn đầu vào.
+   * @param array $config
+   *   Cấu hình kết nối.
+   * @param array $params
+   *   Gồm "accountant", "accountant_date", "ref_no".
+   *
+   * @return array
+   *   Kết quả xử lý.
    */
-  public function accountingInvoice(array $data, array $params): array {
-    try {
-      $invoiceID = [];
-      $config = $data["config"];
+  public function accountingInvoice(array $invoices, array $config, array $params): array {
+    return $this->guard(function () use ($invoices, $config, $params) {
+      $by_id = [];
 
-      $provider = $this->getProvider($config);
+      foreach ($invoices as $invoice) {
+        $invoice_id = $invoice->get("field_invoice_id")->value;
 
-      foreach ($data["invoices"] as $invoice) {
-        if ($invoice_id = $invoice->get("field_invoice_id")->value) {
-          $invoiceID[] = $invoice_id;
-          $list_invoice[$invoice_id] = $invoice;
+        if (!empty($invoice_id)) {
+          $by_id[$invoice_id] = $invoice;
         }
       }
 
-      $params["invoice_id"] = $invoiceID;
+      if (empty($by_id)) {
+        return [
+          "success" => FALSE,
+          "message" => "Không tìm thấy mã hóa đơn để hạch toán",
+        ];
+      }
 
-      $result = $provider->accounting($config, $params);
+      $params["invoice_id"] = array_keys($by_id);
 
-      $this->updateInInvoice($invoice, $params);
-
-      return [
-        "success" => TRUE,
-      ];
-    }
-    catch (\DomainException $e) {
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error(
-        "Invoice system error: @message",
-        ["@message" => $e->getMessage(), "exception" => $e]
+      $this->call(
+        $config,
+        fn (InvoiceProvidersInterface $provider, array $config) => $provider->accounting($config, $params)
       );
 
-      return [
-        "success" => FALSE,
-        "message" => "The system is experiencing problems",
-      ];
-    }
+      // Nhà cung cấp nhận cả lô nên phải cập nhật hết, không chỉ hóa đơn cuối.
+      foreach ($by_id as $invoice) {
+        $this->updateInvoice($invoice, [
+          "field_invoice_accountant" => $params["accountant"] ?? "",
+          "field_invoice_accounting_date" => $params["accountant_date"] ?? NULL,
+          "field_invoice_refno" => $params["ref_no"] ?? "",
+        ]);
+      }
+
+      return ["success" => TRUE];
+    });
   }
 
   /**
-   * Tải file hóa đơn đầu vào.
+   * Tải file PDF và XML của hóa đơn đầu vào.
+   *
+   * @param array $invoices
+   *   Entity hóa đơn đầu vào.
+   * @param array $config
+   *   Cấu hình kết nối.
+   *
+   * @return array
+   *   Kết quả xử lý.
    */
-  public function fileInputInvoice(array $data): array {
-    try {
-      $config = $data['config'];
-      $provider = $this->getProvider($config);
-      
-      $fields = [
-        "pdf" => "field_invoice_pdf",
-        "xml" => "field_invoice_xml",
-      ];
+  public function fileInputInvoice(array $invoices, array $config): array {
+    return $this->guard(function () use ($invoices, $config) {
+      $saved = 0;
+      $total = 0;
 
-      $invoice = reset($data["invoices"]);
+      // Gói ZIP không cho biết file nào của hóa đơn nào, nên tải riêng từng hóa
+      // đơn để gắn file đúng chỗ.
+      foreach ($invoices as $invoice) {
+        $invoice_id = $invoice->get("field_invoice_id")->value;
 
-      if ($invoice_id = $invoice->get("field_invoice_id")->value) {
-        $invoiceID[] = $invoice_id;
+        if (empty($invoice_id)) {
+          continue;
+        }
+
+        $total++;
+
+        $binary = $this->call(
+          $config,
+          fn (InvoiceProvidersInterface $provider, array $config) => $provider->download(
+            $config,
+            [$invoice_id]
+          )
+        );
+
+        if ($binary === "") {
+          continue;
+        }
+
+        if ($this->attachZip($invoice, $binary)) {
+          $saved++;
+        }
       }
 
-      $binary = $provider->dowload($config, $invoiceID);
+      if ($total === 0) {
+        return [
+          "success" => FALSE,
+          "message" => "Không tìm thấy mã hóa đơn để tải file",
+        ];
+      }
 
-      if (empty($binary)) {
+      if ($saved === 0) {
         return [
           "success" => FALSE,
           "message" => "Unable to download PDF file.",
         ];
       }
 
-      $file = $this->savePdfZip($binary, $fields);
+      return ["success" => TRUE];
+    });
+  }
 
-      if (empty($file["pdf"])) {
-        return [
-          "success" => FALSE,
-          "message" => "Unable to save PDF file.",
-        ];
+  /**
+   * Ghi kết quả phát hành lên entity hóa đơn.
+   *
+   * @param array $invoices
+   *   Entity hóa đơn, đánh khoá theo uuid.
+   * @param array $results
+   *   Kết quả nhà cung cấp, đánh khoá theo RefID (chính là uuid).
+   * @param array $extra
+   *   Field gán thêm cho hóa đơn phát hành thành công.
+   *
+   * @return array
+   *   Gồm "success", "issued" và "errors".
+   */
+  private function applyPublishResults(array $invoices, array $results, array $extra): array {
+    $issued = [];
+    $errors = [];
+
+    if (empty($results)) {
+      return [
+        "success" => FALSE,
+        "message" => "Nhà cung cấp không trả về kết quả phát hành",
+      ];
+    }
+
+    foreach ($results as $ref => $result) {
+      $invoice = $invoices[$ref] ?? NULL;
+
+      if (!$invoice instanceof InvoiceInterface) {
+        $errors[] = "Không khớp được kết quả phát hành với hóa đơn ({$ref})";
+        continue;
       }
 
-      $invoice->set($fields["pdf"], [
-        "target_id" => $file["pdf"]->id(),
-        "display" => 1,
+      if (!empty($result["ErrorCode"])) {
+        $errors[] = sprintf(
+          "%s: %s",
+          $invoice->label(),
+          $result["DescriptionErrorCode"] ?? $result["ErrorCode"]
+        );
+        continue;
+      }
+
+      $template_no = (string) ($result["InvTemplateNo"] ?? "");
+      $series = (string) ($result["InvSeries"] ?? "");
+
+      $fields = $extra + [
+        "field_invoice_issue" => 1,
+        "field_invoice_no" => $result["InvNo"] ?? NULL,
+        "field_invoice_refno" => $result["RefID"] ?? NULL,
+        "field_invoice_pattern" => $template_no,
+        // Ký hiệu hiển thị gồm mẫu số ghép ký hiệu, khớp với hóa đơn nhập từ
+        // file XML để chỗ nào cũng đọc được như nhau.
+        "field_invoice_serial" => $template_no . $series,
+        "field_invoice_transaction" => $result["TransactionID"] ?? NULL,
+        "field_invoice_mccqt" => $result["InvCode"] ?? NULL,
+        "field_invoice_date" => $this->toUtc($result["PublishedTime"] ?? "now") ?? $this->toUtc("now"),
+      ];
+
+      if (!empty($result["base64"]) && !empty($result["TransactionID"])) {
+        $file = $this->savePdf(
+          $result["base64"],
+          $result["TransactionID"] . ".pdf",
+          self::BUNDLE_OUT
+        );
+
+        if ($file !== NULL) {
+          $fields["field_invoice_pdf"] = [
+            "target_id" => $file,
+            "display" => 1,
+          ];
+        }
+      }
+
+      $this->updateInvoice($invoice, $fields);
+      $issued[$ref] = $invoice;
+    }
+
+    return [
+      "success" => $issued !== [],
+      "issued" => $issued,
+      "errors" => $errors,
+      "message" => $issued === [] ? (reset($errors) ?: "Invoice issuance failed") : NULL,
+    ];
+  }
+
+  /**
+   * Mô tả hóa đơn gốc để gửi kèm khi phát hành hóa đơn thay thế.
+   *
+   * @param InvoiceInterface $original
+   *   Hóa đơn bị thay thế.
+   *
+   * @return array
+   *   Số, mẫu số, ký hiệu và ngày của hóa đơn gốc.
+   */
+  private function buildOriginalReference(InvoiceInterface $original): array {
+    $pattern = (string) $original->get("field_invoice_pattern")->value;
+    $serial = (string) $original->get("field_invoice_serial")->value;
+
+    // field_invoice_serial lưu mẫu số ghép ký hiệu ("1C25TAA"), MISA lại cần
+    // hai phần tách rời.
+    if ($pattern !== "" && str_starts_with($serial, $pattern)) {
+      $serial = substr($serial, strlen($pattern));
+    }
+
+    $date = $original->get("field_invoice_date")->value;
+
+    return [
+      "invoice_no" => $original->get("field_invoice_no")->value ?? "",
+      "invoice_template_no" => $pattern !== "" ? $pattern : "1",
+      "invoice_template_series" => $serial,
+      "invoice_date" => $date ? substr($date, 0, 10) : date("Y-m-d"),
+    ];
+  }
+
+  /**
+   * Ánh xạ EInvoiceStatus của MISA sang field_invoice_status của hệ thống.
+   *
+   * Hai bên đánh số khác nhau nên không chép thẳng được.
+   *
+   * @param int $status
+   *   Giá trị EInvoiceStatus.
+   *
+   * @return int|null
+   *   Giá trị field_invoice_status, NULL khi MISA trả trạng thái lạ.
+   */
+  private function mapEInvoiceStatus(int $status): ?int {
+    return match ($status) {
+      // Hóa đơn gốc.
+      1 => 1,
+      // Hóa đơn đã bị xóa bỏ/hủy bỏ.
+      2 => self::STATUS_CANCELLED,
+      // Bản thân nó là hóa đơn thay thế.
+      3 => 2,
+      // Bản thân nó là hóa đơn điều chỉnh.
+      5 => 3,
+      // Đã bị hóa đơn khác thay thế.
+      7 => self::STATUS_REPLACED,
+      // Đã bị hóa đơn khác điều chỉnh.
+      8 => 5,
+      default => NULL,
+    };
+  }
+
+  /**
+   * Đánh khoá hóa đơn theo mã giao dịch.
+   *
+   * @param array $invoices
+   *   Entity hóa đơn đầu ra.
+   *
+   * @return array
+   *   Entity đánh khoá theo TransactionID.
+   */
+  private function indexByTransaction(array $invoices): array {
+    $result = [];
+
+    foreach ($invoices as $invoice) {
+      $transaction = $invoice->get("field_invoice_transaction")->value;
+
+      if (!empty($transaction)) {
+        $result[$transaction] = $invoice;
+      }
+    }
+
+    return $result;
+  }
+
+  /**
+   * Gọi nhà cung cấp, tự lấy token mới và thử lại một lần khi token hết hạn.
+   *
+   * @param array $config
+   *   Cấu hình kết nối.
+   * @param callable $callback
+   *   Hàm nhận (provider, config) và thực hiện lệnh.
+   *
+   * @return mixed
+   *   Kết quả của $callback.
+   */
+  private function call(array $config, callable $callback): mixed {
+    try {
+      return $callback($this->getProvider($config), $config);
+    }
+    catch (InvoiceTokenException $e) {
+      $refreshed = $this->configService->refresh($config);
+
+      if ($refreshed === NULL) {
+        throw new \DomainException($e->getMessage(), 0, $e);
+      }
+
+      $this->logger->info("Đã lấy lại token hóa đơn và gọi lại nhà cung cấp.");
+
+      return $callback($this->getProvider($refreshed), $refreshed);
+    }
+  }
+
+  /**
+   * Bọc lỗi thành mảng kết quả để controller hiển thị.
+   *
+   * @param callable $callback
+   *   Hàm thực hiện nghiệp vụ.
+   *
+   * @return array
+   *   Kết quả, hoặc mảng lỗi khi có ngoại lệ.
+   */
+  private function guard(callable $callback): array {
+    try {
+      return $callback();
+    }
+    catch (\DomainException $e) {
+      return [
+        "success" => FALSE,
+        "message" => $e->getMessage(),
+      ];
+    }
+    catch (\Throwable $e) {
+      $this->logger->error("Invoice system error: @message", [
+        "@message" => $e->getMessage(),
+        "exception" => $e,
       ]);
 
-      if (!empty($file["xml"])) {
-        $invoice->set($fields["xml"], [
-          "target_id" => $file["xml"]->id(),
-          "display" => 1,
-        ]);
-      }
-
-      $invoice->save();
-
-      return [
-        "success" => TRUE,
-      ];
-    }
-    catch (\DomainException $e) {
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error(
-        "Invoice system error: @message",
-        ["@message" => $e->getMessage(), "exception" => $e]
-      );
-
       return [
         "success" => FALSE,
         "message" => "The system is experiencing problems",
@@ -520,48 +728,18 @@ class HandleInvoice {
   }
 
   /**
-   * Xem trước PDF phát hành.
+   * Lấy plugin nhà cung cấp theo cấu hình.
+   *
+   * @param array $config
+   *   Cấu hình kết nối.
+   *
+   * @return InvoiceProvidersInterface
+   *   Plugin nhà cung cấp.
    */
-  public function previewInvoice(array $config, array $data): mixed {
-    try {
-      $provider = $this->getProvider($config);
-      $result = $provider->preview($config, $data);
+  private function getProvider(array $config): InvoiceProvidersInterface {
+    $provider_id = $config["invoice_provider"] ?? "";
 
-      if (!empty($result["errorCode"])) {
-        return [
-          "success" => FALSE,
-          "message" => $result["descriptionErrorCode"],
-        ];
-      }
-
-      return $result;
-    }
-    catch (\DomainException $e) {
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
-    }
-    catch (\Throwable $e) {
-      $this->logger->error(
-        "Invoice system error: @message",
-        ["@message" => $e->getMessage(), "exception" => $e]
-      );
-
-      return [
-        "success" => FALSE,
-        "message" => "The system is experiencing problems",
-      ];
-    }
-  }
-
-  /**
-   * Lấy danh sách provider.
-   */
-  private function getProvider(array $config): object {
-    $provider_id = $config["invoice_provider"];
-
-    if (empty($provider_id)) {
+    if ($provider_id === "") {
       throw new \DomainException("Invoice provider not yet configured");
     }
 
@@ -569,197 +747,304 @@ class HandleInvoice {
       throw new \DomainException("The invoice provider {$provider_id} does not exist");
     }
 
-    return $this->providers->createInstance($provider_id);
+    /** @var InvoiceProvidersInterface $provider */
+    $provider = $this->providers->createInstance($provider_id);
+
+    return $provider;
   }
 
   /**
-   * Cập nhật hóa đơn đầu ra.
+   * Gán giá trị rồi lưu hóa đơn.
+   *
+   * @param InvoiceInterface $invoice
+   *   Hóa đơn cần cập nhật.
+   * @param array $fields
+   *   Field và giá trị mới; field không có trên bundle sẽ được bỏ qua.
    */
-  private function updateOutInvoice(InvoiceInterface $entity, array $fields) {
-    if (empty($entity)) {
-      throw new \DomainException("The entity invoice does not exist");
+  private function updateInvoice(InvoiceInterface $invoice, array $fields): void {
+    foreach ($fields as $name => $value) {
+      if ($value !== NULL && $invoice->hasField($name)) {
+        $invoice->set($name, $value);
+      }
     }
 
-    foreach ($fields as $key => $value) {
-      $entity->set($key, $value);
-    }
-    $entity->save();
-    return $entity;
-  }
-
-  /**
-   * Lưu hóa đơn đầu vào.
-   */
-  private function createInInvoice(EntityStorageInterface $storage, array $data, array $fields) {
-    $data["label"] = $data["field_invoice_name"] ?? "Hóa đơn đầu vào";
-    $data["bundle"] = "input_invoices";
-    $data = array_replace($data, $fields);
-    $invoice = $storage->create($data);
     $invoice->save();
+  }
+
+  /**
+   * Tạo hóa đơn đầu vào từ dữ liệu đã ánh xạ.
+   *
+   * @param EntityStorageInterface $storage
+   *   Storage của entity invoice.
+   * @param array $data
+   *   Dữ liệu đã ánh xạ sang tên field.
+   * @param array $fields
+   *   Field gán thêm.
+   *
+   * @return InvoiceInterface
+   *   Hóa đơn vừa tạo.
+   */
+  private function createInputInvoice(EntityStorageInterface $storage, array $data, array $fields): InvoiceInterface {
+    $label = $data["field_invoice_name"] ?? "Hóa đơn đầu vào";
+    unset($data["field_invoice_name"]);
+
+    $values = array_replace($data, $fields);
+    $definitions = $this->entityFieldManager->getFieldDefinitions("invoice", self::BUNDLE_IN);
+
+    $values = array_filter(
+      $values,
+      static fn (string $name) => isset($definitions[$name]),
+      ARRAY_FILTER_USE_KEY
+    );
+
+    /** @var InvoiceInterface $invoice */
+    $invoice = $storage->create($values + [
+      "label" => $label,
+      "bundle" => self::BUNDLE_IN,
+    ]);
+
+    $invoice->save();
+
     return $invoice;
   }
 
   /**
-   * Cập nhật hóa đơn đầu vào.
+   * Tìm những mã hóa đơn đã có trong hệ thống.
+   *
+   * @param array $invoice_ids
+   *   Mã hóa đơn của nhà cung cấp.
+   *
+   * @return array
+   *   Mảng có khoá là mã hóa đơn đã tồn tại.
    */
-  private function updateInInvoice(InvoiceInterface $invoice, array $data) {
-    $invoice->set("field_invoice_accountant", $data["accountant"]);
-    $invoice->set("field_invoice_accounting_date", $data["accountant_date"]);
-    $invoice->set("field_invoice_refno", $data["ref_no"]);
-    $invoice->save();
+  private function findExistingInvoiceIds(array $invoice_ids): array {
+    $invoice_ids = array_values(array_unique(array_filter($invoice_ids)));
+
+    if (empty($invoice_ids)) {
+      return [];
+    }
+
+    $found = $this->database
+      ->select("invoice__field_invoice_id", "f")
+      ->fields("f", ["field_invoice_id_value"])
+      ->condition("f.bundle", self::BUNDLE_IN)
+      ->condition("f.field_invoice_id_value", $invoice_ids, "IN")
+      ->execute()
+      ->fetchCol();
+
+    return array_fill_keys($found, TRUE);
   }
 
   /**
-   * Lưu file PDF (base64).
+   * Lưu PDF base64 và gắn vào hóa đơn.
+   *
+   * @param InvoiceInterface $invoice
+   *   Hóa đơn cần gắn file.
+   * @param string $base64
+   *   Nội dung PDF mã hoá base64.
+   * @param string $transaction
+   *   Mã giao dịch, dùng đặt tên file.
+   *
+   * @return bool
+   *   TRUE khi lưu được file.
    */
-  private function savePdf(array $data) {
+  private function attachPdf(InvoiceInterface $invoice, string $base64, string $transaction): bool {
+    $file = $this->savePdf($base64, $transaction . ".pdf", $invoice->bundle());
+
+    if ($file === NULL) {
+      return FALSE;
+    }
+
+    $this->updateInvoice($invoice, [
+      "field_invoice_pdf" => [
+        "target_id" => $file,
+        "display" => 1,
+      ],
+    ]);
+
+    return TRUE;
+  }
+
+  /**
+   * Giải mã và lưu file PDF.
+   *
+   * @param string $base64
+   *   Nội dung PDF mã hoá base64.
+   * @param string $filename
+   *   Tên file cần lưu.
+   * @param string $bundle
+   *   Bundle của hóa đơn, quyết định thư mục lưu file.
+   *
+   * @return int|null
+   *   File id, hoặc NULL khi nội dung không hợp lệ.
+   */
+  private function savePdf(string $base64, string $filename, string $bundle): ?int {
     try {
-      $pdf_binary = base64_decode($data["Data"], TRUE);
+      $binary = base64_decode($base64, TRUE);
 
-      if ($pdf_binary === FALSE) {
-        throw new \DomainException("Invalid base64");
-      }
-
-      if (strpos($pdf_binary, "%PDF") !== 0) {
-        throw new \DomainException("Invalid PDF content");
+      if ($binary === FALSE || !str_starts_with($binary, "%PDF")) {
+        throw new \DomainException("Nội dung PDF không hợp lệ");
       }
 
       $file = $this->saveFileByField(
-        "invoice",
-        "input_invoices",
+        $bundle,
         "field_invoice_pdf",
-        $data["TransactionID"] . ".pdf",
-        $pdf_binary,
-        FileSystemInterface::EXISTS_REPLACE
+        $filename,
+        $binary,
+        FileExists::Replace
       );
 
-      return [
-        "success" => TRUE,
-        "data" => [
-          "fid" => $file->id(),
-          "filename" => $file->getFilename(),
-          "uri" => $file->getFileUri(),
-        ],
-      ];
+      return (int) $file->id();
     }
     catch (\Throwable $e) {
-      \Drupal::logger("erpcons")->error($e->getMessage());
+      $this->logger->error("Cannot save invoice PDF: @message", [
+        "@message" => $e->getMessage(),
+        "exception" => $e,
+      ]);
 
-      return [
-        "success" => FALSE,
-        "message" => $e->getMessage(),
-      ];
+      return NULL;
     }
   }
 
   /**
-   * Lưu file PDF (zip).
+   * Bóc gói ZIP của nhà cung cấp và gắn PDF, XML vào hóa đơn.
+   *
+   * @param InvoiceInterface $invoice
+   *   Hóa đơn cần gắn file.
+   * @param string $binary
+   *   Nội dung nhị phân của gói ZIP.
+   *
+   * @return bool
+   *   TRUE khi gắn được ít nhất file PDF.
    */
-  private function savePdfZip(string $data, array $fields) {
-    $result = [
-      "pdf" => NULL,
-      "xml" => NULL,
+  private function attachZip(InvoiceInterface $invoice, string $binary): bool {
+    $fields = [
+      "pdf" => "field_invoice_pdf",
+      "xml" => "field_invoice_xml",
     ];
 
-    $tmpDir = "temporary://invoices";
-    $zipPath = "{$tmpDir}/invoices.zip";
+    $directory = "temporary://invoices";
 
-    $this->fileSystem->prepareDirectory(
-      $tmpDir,
-      FileSystemInterface::CREATE_DIRECTORY
-    );
+    if (!$this->fileSystem->prepareDirectory($directory, FileSystemInterface::CREATE_DIRECTORY)) {
+      throw new \DomainException("Cannot prepare temporary directory");
+    }
 
-    file_put_contents($this->fileSystem->realpath($zipPath), $data);
+    // Tên file kèm id hóa đơn để hai lần tải song song không ghi đè lên nhau.
+    $path = $this->fileSystem->realpath($directory) . "/invoice-" . $invoice->id() . ".zip";
+    file_put_contents($path, $binary);
 
     $zip = new \ZipArchive();
+    $saved = [];
 
-    if ($zip->open($this->fileSystem->realpath($zipPath)) !== TRUE) {
-      throw new \DomainException("Cannot open zip");
+    try {
+      if ($zip->open($path) !== TRUE) {
+        throw new \DomainException("Cannot open zip");
+      }
+
+      for ($index = 0; $index < $zip->numFiles; $index++) {
+        $name = (string) $zip->getNameIndex($index);
+
+        if (str_contains($name, "..")) {
+          continue;
+        }
+
+        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+        if (!isset($fields[$extension]) || isset($saved[$extension])) {
+          continue;
+        }
+
+        $content = $zip->getFromIndex($index);
+
+        if ($content === FALSE) {
+          continue;
+        }
+
+        $saved[$extension] = $this->saveFileByField(
+          $invoice->bundle(),
+          $fields[$extension],
+          basename($name),
+          $content,
+          FileExists::Rename
+        );
+      }
+
+      $zip->close();
+    }
+    finally {
+      $this->fileSystem->unlink($path);
     }
 
-    for ($i = 0; $i < $zip->numFiles; $i++) {
-      $name = $zip->getNameIndex($i);
-
-      if (str_contains($name, "..")) {
-        continue;
-      }
-
-      $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-
-      if (!isset($fields[$ext])) {
-        continue;
-      }
-
-      $content = $zip->getFromIndex($i);
-
-      if ($content === FALSE) {
-        continue;
-      }
-
-      $file = $this->saveFileByField(
-        "invoice",
-        "input_invoices",
-        $fields[$ext],
-        basename($name),
-        $content,
-        FileSystemInterface::EXISTS_RENAME
-      );
-
-      $result[$ext] = $file;
+    if (empty($saved["pdf"])) {
+      return FALSE;
     }
 
-    $zip->close();
+    $values = [];
 
-    return $result;
+    foreach ($saved as $extension => $file) {
+      $values[$fields[$extension]] = [
+        "target_id" => $file->id(),
+        "display" => 1,
+      ];
+    }
+
+    $this->updateInvoice($invoice, $values);
+
+    return TRUE;
   }
 
   /**
-   * Lấy cấu hình trường PDF.
+   * Lưu file vào đúng thư mục cấu hình của field.
+   *
+   * @param string $bundle
+   *   Bundle của entity invoice.
+   * @param string $field_name
+   *   Tên field file.
+   * @param string $filename
+   *   Tên file.
+   * @param string $content
+   *   Nội dung file.
+   * @param FileExists $file_exists
+   *   Cách xử lý khi file đã tồn tại.
+   *
+   * @return \Drupal\file\FileInterface
+   *   File đã lưu.
    */
   private function saveFileByField(
-    string $entityType,
     string $bundle,
-    string $fieldName,
+    string $field_name,
     string $filename,
     string $content,
-    int $replaceMode = FileSystemInterface::EXISTS_RENAME,
+    FileExists $file_exists,
   ) {
-    /** @var \Drupal\field\Entity\FieldConfig $fieldConfig */
-    $fieldConfig = $this->entityFieldManager
-      ->getFieldDefinitions($entityType, $bundle)[$fieldName];
+    $definitions = $this->entityFieldManager->getFieldDefinitions("invoice", $bundle);
 
-    $settings = $fieldConfig->getSettings();
+    if (!isset($definitions[$field_name])) {
+      throw new \DomainException("Field {$field_name} does not exist on {$bundle}");
+    }
 
-    $scheme = $fieldConfig
-      ->getFieldStorageDefinition()
-      ->getSetting("uri_scheme");
+    $definition = $definitions[$field_name];
+    $scheme = $definition->getFieldStorageDefinition()->getSetting("uri_scheme");
 
     if (!$scheme) {
       throw new \DomainException("Missing uri_scheme");
     }
 
     $directory = $this->token->replace(
-      $settings["file_directory"] ?? "",
-      ["date" => \Drupal::time()->getRequestTime()]
+      $definition->getSetting("file_directory") ?? "",
+      ["date" => $this->time->getRequestTime()]
     );
 
     $destination = $scheme . "://" . trim($directory, "/");
 
-    if (
-      !$this->fileSystem->prepareDirectory(
-        $destination,
-        FileSystemInterface::CREATE_DIRECTORY
-      )
-    ) {
+    if (!$this->fileSystem->prepareDirectory($destination, FileSystemInterface::CREATE_DIRECTORY)) {
       throw new \DomainException("Cannot prepare directory");
     }
 
-    $uri = $destination . "/" . $filename;
-
     $file = $this->fileRepository->writeData(
       $content,
-      $uri,
-      $replaceMode
+      $destination . "/" . $filename,
+      $file_exists
     );
 
     if (!$file) {
@@ -773,34 +1058,30 @@ class HandleInvoice {
   }
 
   /**
-   * Lấy các hóa đơn đã phát hành trước đó.
+   * Đổi chuỗi thời gian sang định dạng UTC mà field datetime chấp nhận.
+   *
+   * @param string $value
+   *   Chuỗi thời gian.
+   *
+   * @return string|null
+   *   Chuỗi "Y-m-d\TH:i:s" theo UTC, NULL khi không đọc được.
    */
-  private function checkInvoiceIssues(array $params) {
-    $field_invoice_querry = \Drupal::database()
-      ->select("invoice__field_invoice_id", "f");
-
-    $field_invoice_querry->join('invoice__field_invoice_date', 'd', 'f.entity_id = d.entity_id');
-
-    $field_invoice_querry->fields("f", ["field_invoice_id_value"])
-      ->condition("f.bundle", "input_invoices");
-
-    if (!empty($params["from"])) {
-      $field_invoice_querry->condition(
-        'd.field_invoice_date_value',
-        $params['from'],
-        '>='
-      );
+  private function toUtc(string $value): ?string {
+    if (trim($value) === "") {
+      return NULL;
     }
 
-    if (!empty($params["to"])) {
-      $field_invoice_querry->condition(
-        'd.field_invoice_date_value',
-        $params['to'],
-        '<='
-      );
-    }
+    try {
+      $date = new \DateTime($value);
+      $date->setTimezone(new \DateTimeZone("UTC"));
 
-    return $field_invoice_querry->execute()->fetchCol();
+      return $date->format("Y-m-d\TH:i:s");
+    }
+    catch (\Throwable) {
+      // \Throwable chứ không phải \Exception, xem ghi chú ở
+      // MisaProvider::formatDate().
+      return NULL;
+    }
   }
 
 }

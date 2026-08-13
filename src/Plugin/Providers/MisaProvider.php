@@ -2,26 +2,119 @@
 
 namespace Drupal\e_invoice\Plugin\Providers;
 
-use Drupal\Core\Plugin\PluginBase;
-use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
-use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\Component\Uuid\UuidInterface;
-use Symfony\Component\DependencyInjection\ContainerInterface;
-use GuzzleHttp\ClientInterface;
-use GuzzleHttp\Exception\RequestException;
-use Drupal\e_invoice\Service\GetNumberToWords;
+use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
+use Drupal\Core\Plugin\PluginBase;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\e_invoice\Exception\InvoiceRetryException;
+use Drupal\e_invoice\Exception\InvoiceTokenException;
 use Drupal\e_invoice\InvoiceProvidersAttribute;
 use Drupal\e_invoice\InvoiceProvidersInterface;
+use Drupal\e_invoice\Service\GetNumberToWords;
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception\GuzzleException;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * Provider for invoicing integration using Misa.
+ * Tích hợp hóa đơn điện tử MISA meInvoice.
+ *
+ * Provider nói chuyện với ba nhóm API khác nhau của MISA, mỗi nhóm một quy ước
+ * riêng nên không gộp chung được:
+ * - "/api/integration/*" trên invoice_host: phát hành, thay thế, xem trước,
+ *   tra trạng thái, tải PDF hóa đơn đầu ra. Bọc phản hồi bằng khoá viết thường
+ *   ("success", "errorCode", "data") và nhét JSON lồng trong chuỗi.
+ * - "/api2/*" trên invoice_host: validateUser và jwttoken, dùng khoá viết hoa
+ *   ("Success", "Message", "Data").
+ * - "/inbot/api/*" trên invoice_appurl: hóa đơn đầu vào, cũng dùng khoá viết
+ *   hoa và yêu cầu thêm header ClientId.
+ *
+ * @see https://www.misa.vn/154997/tai-lieu-open-api-tich-hop-hoa-don-dien-tu-misa-meinvoice-dau-vao
  */
 #[InvoiceProvidersAttribute(
   id: "misa",
   label: new TranslatableMarkup("Misa"),
 )]
-
 class MisaProvider extends PluginBase implements InvoiceProvidersInterface, ContainerFactoryPluginInterface {
+
+  /**
+   * Số bản ghi tối đa MISA trả về mỗi lần gọi API danh sách.
+   */
+  private const PAGE_SIZE = 100;
+
+  /**
+   * Chặn trên số trang khi kéo hóa đơn đầu vào, phòng khi MISA trả sai Total.
+   */
+  private const MAX_PAGES = 200;
+
+  /**
+   * Số mã tối đa gửi kèm một lần gọi tra trạng thái hoặc tải file.
+   */
+  private const BATCH_SIZE = 50;
+
+  /**
+   * Số lần hỏi lại khi MISA chưa sinh xong file.
+   */
+  private const FILE_ATTEMPTS = 6;
+
+  /**
+   * Số lần phát hành lại khi MISA báo lỗi có thể thử lại được.
+   */
+  private const PUBLISH_ATTEMPTS = 3;
+
+  /**
+   * Khoảng nghỉ (giây) giữa hai lần hỏi file.
+   */
+  private const TIME_DELAY = 2;
+
+  /**
+   * Timeout (giây) cho các lệnh nặng: phát hành, kéo danh sách, tải file.
+   */
+  private const LONG_TIMEOUT = 120;
+
+  /**
+   * Mã lỗi MISA trả về khi token hết hạn hoặc không hợp lệ.
+   */
+  private const TOKEN_ERRORS = [
+    "tokenexpiredcode",
+    "invalidtokencode",
+    "tokenexpired",
+    "invalidtoken",
+    "unauthorized",
+  ];
+
+  /**
+   * Mã lỗi tài liệu nói rõ là cứ phát hành lại, không phải lỗi dữ liệu.
+   */
+  private const RETRY_ERRORS = [
+    "invoicenumbernotcotinuous",
+    "invoiceduplicated",
+  ];
+
+  /**
+   * Các mức thuế suất MISA nhận thẳng, còn lại phải khai dưới dạng "KHAC:x%".
+   */
+  private const STANDARD_VAT_RATES = [0.0, 5.0, 8.0, 10.0];
+
+  /**
+   * Tên thuế suất đặc biệt: không chịu thuế và không kê khai nộp thuế.
+   */
+  private const SPECIAL_VAT_RATES = ["KCT", "KKKNT"];
+
+  /**
+   * Kiểu ký mặc định: 2 = ký HSM, hiển thị chữ ký trên bản thể hiện.
+   *
+   * Tài liệu quy định kiểu ký phải khớp loại hóa đơn: hóa đơn từ máy tính tiền
+   * dùng 5 (hoặc 6 khi ký bất đồng bộ), không dùng 2.
+   *
+   * @see self::SIGN_TYPE_MACHINE
+   */
+  private const SIGN_TYPE_DEFAULT = 2;
+
+  /**
+   * Kiểu ký cho hóa đơn từ máy tính tiền: 5 = MTT, không hiển thị chữ ký.
+   */
+  private const SIGN_TYPE_MACHINE = 5;
 
   /**
    * {@inheritdoc}
@@ -33,6 +126,7 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
     protected UuidInterface $uuid,
     protected GetNumberToWords $getNumberToWords,
     protected ClientInterface $client,
+    protected LoggerInterface $logger,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
   }
@@ -48,106 +142,205 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
       $container->get("uuid"),
       $container->get("e_invoice.get_number_to_words"),
       $container->get("http_client"),
+      $container->get("logger.channel.e_invoice"),
     );
   }
 
   /**
-   * Call cUrl.
+   * {@inheritdoc}
    */
-  private function callApi(
-    string $url,
-    array $headers,
-    array $payload = [],
-    string $method = "POST",
-    int $timeout = 30,
-  ): mixed {
-    try {
-      $response = $this->client->request($method, $url, [
-        "headers" => $headers,
-        "json" => $payload,
-        "timeout" => $timeout,
-      ]);
+  public function authenticate(array $config): array {
+    $result = [
+      "token" => "",
+      "jwt_token" => "",
+      "subscribers" => "",
+      "organization" => "",
+    ];
 
-      $body = $response->getBody()->getContents();
-      $contentType = $response->getHeaderLine('Content-Type');
+    // Token của nhóm API phát hành (hóa đơn đầu ra).
+    if (!empty($config["invoice_host"])) {
+      $token = $this->integration(
+        $this->request($config["invoice_host"], "/api/integration/auth/token", [], [
+          "appid" => $config["invoice_appid"],
+          "taxcode" => $config["invoice_taxcode"],
+          "username" => $config["invoice_username"],
+          "password" => $config["invoice_password"],
+        ]),
+        "Không lấy được token phát hành hóa đơn"
+      );
 
-      if (str_contains($contentType, 'application/zip')) {
-        return $body;
+      $result["token"] = (string) ($this->field($token, "data") ?? "");
+
+      if ($result["token"] === "") {
+        throw new \DomainException("MISA không trả về token phát hành hóa đơn");
       }
+    }
 
-      return json_decode($body, TRUE);
+    // Chuỗi 4 bước của nhóm API hóa đơn đầu vào. Không khai báo appurl nghĩa là
+    // công ty này chỉ phát hành, bỏ qua để khỏi gọi thừa.
+    if (empty($config["invoice_appurl"])) {
+      return $result;
     }
-    catch (RequestException $e) {
-      throw new \RuntimeException("Connection error: " . $e->getMessage(), 0, $e);
+
+    // Bước 1: validateUser để lấy secure token.
+    $secure = $this->api2(
+      $this->request($config["invoice_host"], "/api2/validateUser", $this->authHeaders($config), [
+        "PassWord" => $config["invoice_password"],
+      ]),
+      "Không lấy được secure token"
+    );
+
+    // Bước 2: đổi secure token lấy JWT.
+    $jwt = $this->api2(
+      $this->request(
+        $config["invoice_host"],
+        "/api2/auth/jwttoken",
+        $this->authHeaders($config) + [
+          "securetoken" => $this->extractSecureToken((string) ($secure["Data"] ?? "")),
+        ],
+        []
+      ),
+      "Không lấy được JWT token"
+    );
+
+    $result["jwt_token"] = (string) ($jwt["Data"]["AccessToken"] ?? "");
+
+    if ($result["jwt_token"] === "") {
+      throw new \DomainException("MISA không trả về AccessToken");
     }
+
+    // Bước 3: tra subscriber theo mã số thuế. Tài liệu yêu cầu cả ClientId lẫn
+    // Bearer token ở bước này.
+    $headers = [
+      "ClientId" => (string) ($config["invoice_client"] ?? ""),
+      "Authorization" => "Bearer " . $result["jwt_token"],
+    ];
+
+    $subscribers = $this->api2(
+      $this->request(
+        $config["invoice_appurl"],
+        "/inbot/api/subscribers/code/" . rawurlencode((string) $config["invoice_taxcode"]),
+        $headers,
+        NULL,
+        "GET"
+      ),
+      "Không lấy được subscriber"
+    );
+
+    $result["subscribers"] = (string) ($subscribers["Data"]["Id"] ?? "");
+
+    if ($result["subscribers"] === "") {
+      throw new \DomainException("MISA không trả về SubscriberId");
+    }
+
+    // Bước 4: lấy đơn vị đầu tiên, dùng để lọc hóa đơn theo chi nhánh.
+    $organizations = $this->api2(
+      $this->request(
+        $config["invoice_appurl"],
+        "/inbot/api/{$result["subscribers"]}/organizations",
+        $headers,
+        NULL,
+        "GET"
+      ),
+      "Không lấy được organization"
+    );
+
+    $organization = reset($organizations["Data"]) ?: [];
+    $result["organization"] = (string) ($organization["Id"] ?? "");
+
+    return $result;
   }
 
   /**
-   * Get authenticate.
+   * {@inheritdoc}
    */
-  public function authenticate(array $config): array {
-    $token = $this->token($config);
+  public function preview(array $config, array $data): array {
+    $invoices = $this->buildInvoices($config["invoice_template"] ?? [], $data);
 
-    if (!$token["success"]) {
-      throw new \DomainException("Unable to receive the token");
+    if (empty($invoices)) {
+      throw new \DomainException("Không có dữ liệu hóa đơn để xem trước");
     }
 
-    $secure = $this->secureToken($config);
+    return $this->integration(
+      $this->request(
+        $config["invoice_host"],
+        "/api/integration/invoice/unpublishview",
+        $this->bearer($config),
+        reset($invoices),
+        "POST",
+        self::LONG_TIMEOUT
+      ),
+      "Không xem trước được hóa đơn"
+    );
+  }
 
-    if (!$secure["Success"]) {
-      throw new \DomainException("Unable to receive the Securet token");
+  /**
+   * {@inheritdoc}
+   */
+  public function issue(array $config, array $data, bool $get_file = FALSE): array {
+    return $this->publish($config, $data, "create", $get_file);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function replace(array $config, array $data, bool $get_file = TRUE): array {
+    return $this->publish($config, $data, "replace", $get_file);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function status(array $config, array $codes, array $params = []): array {
+    $codes = array_values(array_unique(array_filter($codes)));
+
+    if (empty($codes)) {
+      throw new \DomainException("Không tìm thấy mã giao dịch");
     }
 
-    $jwt = $this->jwtToken($config, $secure["Data"]);
+    $query = http_build_query([
+      // 1 = tra theo TransactionID, 2 = tra theo RefID.
+      "inputType" => "1",
+      "invoiceCalcu" => $params["calcu"] ?? "false",
+      "invoiceWithCode" => $params["withCode"] ?? "true",
+    ]);
 
-    if (!$jwt["Success"]) {
-      throw new \DomainException("Unable to receive the JWT token");
-    }
+    $result = [];
 
-    $result = [
-      "token" => $token["data"] ?? "",
-      "jwt_token" => $jwt["Data"]["AccessToken"] ?? "",
-    ];
-
-    if (!empty($config["invoice_appurl"])) {
-      $subscribers = $this->subscribers($config);
-
-      if (!$subscribers["Success"]) {
-        throw new \DomainException("Cannot get subscriber");
-      }
-
-      $organization = $this->organization(
-        $config,
-        $jwt["Data"],
-        $subscribers["Data"]["Id"]
+    // Tài liệu giới hạn 50 mã mỗi lần gọi.
+    foreach (array_chunk($codes, self::BATCH_SIZE) as $chunk) {
+      $response = $this->request(
+        $config["invoice_host"],
+        "/api/integration/invoice/status?" . $query,
+        $this->bearer($config),
+        $chunk
       );
 
-      if (!$organization["Success"]) {
-        throw new \DomainException("Cannot get organization");
+      // Endpoint này khi thì trả thẳng danh sách, khi thì bọc trong phong bì
+      // "success"/"data" như các endpoint integration khác.
+      if (is_array($response) && (isset($response["success"]) || isset($response["Success"]))) {
+        $response = $this->decodeNested(
+          $this->field(
+            $this->integration($response, "Không tra được trạng thái hóa đơn"),
+            "data"
+          )
+        );
       }
 
-      $result += [
-        "subscribers" => $subscribers["Data"]["Id"],
-        "organization" => reset($organization["Data"]),
-      ];
+      $result += $this->keyBy(is_array($response) ? $response : [], "TransactionID");
     }
 
     return $result;
   }
 
   /**
-   * Save file pdf.
+   * {@inheritdoc}
    */
-  public function pdf(array $config, string $code, string $type = "download"): array {
-    $end_point = "/api/integration/invoice/Download";
+  public function pdf(array $config, array $codes): array {
+    $codes = array_values(array_unique(array_filter($codes)));
 
-    if (empty($code)) {
-      if ($type === "download") {
-        throw new \DomainException("Not found transaction ID");
-      }
-      else {
-        return [];
-      }
+    if (empty($codes)) {
+      throw new \DomainException("Không tìm thấy mã giao dịch");
     }
 
     $query = http_build_query([
@@ -156,362 +349,418 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
       "downloadDataType" => "pdf",
     ]);
 
-    if ($type === "save") {
-      sleep(5);
+    // MISA sinh PDF không đồng bộ: ngay sau khi phát hành, lần gọi đầu có thể
+    // chưa có file. Hỏi lại vài lần thay vì nghỉ cứng một khoảng đoán chừng.
+    $files = [];
+
+    $pending = $codes;
+
+    for ($attempt = 1; $attempt <= self::FILE_ATTEMPTS; $attempt++) {
+      // Tài liệu giới hạn 50 mã giao dịch mỗi lần gọi.
+      foreach (array_chunk($pending, self::BATCH_SIZE) as $chunk) {
+        $response = $this->integration(
+          $this->request(
+            $config["invoice_host"],
+            "/api/integration/invoice/download?" . $query,
+            $this->bearer($config),
+            $chunk,
+            "POST",
+            self::LONG_TIMEOUT
+          ),
+          "Không tải được PDF hóa đơn"
+        );
+
+        foreach ($this->decodeNested($this->field($response, "data")) as $file) {
+          if (!empty($file["TransactionID"]) && !empty($file["Data"])) {
+            $files[$file["TransactionID"]] = $file;
+          }
+        }
+      }
+
+      // Lần thử sau chỉ hỏi những hóa đơn còn thiếu file.
+      $pending = array_values(array_diff($codes, array_keys($files)));
+
+      if (empty($pending)) {
+        break;
+      }
+
+      if ($attempt < self::FILE_ATTEMPTS) {
+        sleep(self::TIME_DELAY);
+      }
     }
 
-    $response = $this->callApi(
-      $config["invoice_host"] . $end_point . "?" . $query,
-      [
-        "Content-Type" => "application/json",
-        "Authorization" => "Bearer {$config["invoice_token"]}",
-      ],
-      [$code],
-      "POST",
-      200
-    );
-
-    if (!$response["success"]) {
-      if ($type === "download") {
-        throw new \DomainException($response["errorCode"]);
-      }
-      else {
-        return [];
-      }
-    }
-
-    $arr_data = json_decode($response["data"], TRUE);
-    return reset($arr_data);
+    return $files;
   }
 
   /**
-   * Issue invoice.
-   */
-  public function issue(array $config, array $data, bool $get_file): array {
-    $end_point = "/api/integration/invoice";
-    $dataInv = $this->getData($config["invoice_template"], $data);
-
-    $response = $this->callApi(
-      $config["invoice_host"] . $end_point,
-      [
-        "Content-Type" => "application/json",
-        "Authorization" => "Bearer {$config["invoice_token"]}",
-      ],
-      [
-        "SignType" => 2,
-        "InvoiceData" => $dataInv,
-        "PublishInvoiceData" => NULL,
-      ]
-    );
-
-    if (!$response["success"]) {
-      throw new \DomainException($response["errorCode"]);
-    }
-
-    $data_json = json_decode($response["publishInvoiceResult"], TRUE);
-
-    if ($get_file) {
-      $invoice = reset($data_json);
-
-      if (!empty($invoice["ErrorCode"])) {
-        throw new \DomainException($invoice["DescriptionErrorCode"]);
-      }
-      $file_data = $this->pdf($config, $invoice["TransactionID"], "save");
-      if (!empty($file_data)) {
-        $invoice["base64"] = $file_data["Data"];
-      }
-
-      return $invoice;
-    }
-
-    return $data_json;
-  }
-
-  /**
-   * Replace invoice.
-   */
-  public function replace(array $config, array $data): array {
-    $end_point = "/api/integration/invoice";
-    $dataInv = $this->getData($config["invoice_template"], $data, "replace");
-
-    $response = $this->callApi(
-      $config["invoice_host"] . $end_point,
-      [
-        "Content-Type" => "application/json",
-        "Authorization" => "Bearer {$config["invoice_token"]}",
-      ],
-      [
-        "SignType" => 2,
-        "InvoiceData" => $dataInv,
-        "PublishInvoiceData" => NULL,
-      ]
-    );
-
-    if (!$response["success"]) {
-      throw new \DomainException($response["errorCode"]);
-    }
-
-    $data_json = json_decode($response["publishInvoiceResult"], TRUE);
-    $invoice = reset($data_json);
-
-    if (!empty($invoice["ErrorCode"])) {
-      throw new \DomainException($invoice["DescriptionErrorCode"]);
-    }
-
-    $file_data = $this->pdf($config, $invoice["TransactionID"], "save");
-    if (!empty($file_data)) {
-      $invoice["base64"] = $file_data["Data"];
-    }
-
-    return $invoice;
-  }
-
-  /**
-   * Input invoice.
+   * {@inheritdoc}
    */
   public function modified(array $config, array $params): array {
     $data = [];
-    $subscribers = $config["invoice_subscribers"];
-    $organization = $config["invoice_organization"];
+    $skip = (int) ($params["skip"] ?? 0);
 
-    $end_point = "/inbot/api/{$subscribers}/{$organization}/invoices/v2/modified";
+    for ($page = 0; $page < self::MAX_PAGES; $page++) {
+      $query = http_build_query([
+        "from" => $params["from"] ?? "",
+        "to" => $params["to"] ?? "",
+        "take" => self::PAGE_SIZE,
+        "skip" => $skip,
+        "IsFilterInvDate" => "true",
+      ]);
 
-    $query = http_build_query([
-      "take" => "100",
-      "from" => $params["from"] ?? "",
-      "to" => $params["to"] ?? "",
-      "skip" => $params["skip"] ?? "0",
-      "IsFilterInvDate" => "true",
-    ]);
+      $response = $this->api2(
+        $this->request(
+          $config["invoice_appurl"],
+          $this->inbotPath($config, "invoices/v2/modified") . "?" . $query,
+          $this->inbotHeaders($config),
+          NULL,
+          "GET",
+          self::LONG_TIMEOUT
+        ),
+        "Không lấy được danh sách hóa đơn đầu vào"
+      );
 
-    $response = $this->callApi(
-      $config["invoice_appurl"] . $end_point . "?" . $query,
-      [
-        "Content-Type" => "application/json",
-        "Authorization" => "Bearer {$config["invoice_jwt_token"]}",
-        "ClientId" => "{$config["invoice_client"]}",
-      ],
-      [],
-      "GET"
-    );
+      $items = $response["Data"]["Data"] ?? [];
 
-    if (!$response["Success"]) {
-      throw new \DomainException("Error retrieving input invoices");
-    }
-
-    foreach ($response["Data"]["Data"] as $item) {
-      $product = [];
-      $invoice_date = new \DateTime($item["InvoiceDate"]);
-      $accounting_date = isset($item['AccountingDate'])
-        ? new \DateTime($item['AccountingDate'])
-        : NULL;
-
-      foreach ($item["Items"] as $p) {
-        $product[] = [
-          "item_name" => $p["ItemName"] ?? "",
-          "item_code" => $p["ItemCode"] ?? "",
-          "item_unit" => $p["UnitName"] ?? "",
-          "item_quantity" => $p["Quantity"] ?? 0,
-          "item_price" => $p["UnitPrice"] ?? 0,
-          "item_amount" => $p["Amount"] ?? 0,
-          "item_discount_rate" => $p["DiscountRate"] ?? 0,
-          "item_discount_amount" => $p["DiscountAmount"] ?? 0,
-          "item_amount_without_vat" => $p["AmountWithoutVat"] ?? 0,
-          "item_vat_rate" => $p["VatRate"] ?? 0,
-          "item_vat_amount" => $p["VatAmount"] ?? 0,
-          "item_total_amount" => $p["Amount"] ?? 0,
-          "item_type" => $p["Nature"] ?? 0
-        ];
+      foreach ($items as $item) {
+        $data[] = $this->mapInputInvoice($item);
       }
 
-      $data[] = [
-        "field_invoice_name" => $item["InvoiceName"] ?? $item["TitleInvoiceText"],
-        "field_invoice_id" => $item["InvoiceId"] ?? "",
-        "field_invoice_no" => $item["InvoiceNo"] ?? "",
-        "field_invoice_status" => $item["StatusInvoice"] ?? 1,
-        "field_invoice_seller_name" => $item["SellerName"] ?? "",
-        "field_invoice_seller_taxcode" => $item["SellerTaxCode"] ?? "",
-        "field_invoice_seller_address" => $item["SellerAddress"] ?? "",
-        "field_invoice_buyer_name" => $item["BuyerName"] ?? "",
-        "field_invoice_buyer_taxcode" => $item["BuyerTaxCode"] ?? "",
-        "field_invoice_buyer_address" => $item["BuyerAddress"] ?? "",
-        "field_invoice_mccqt" => $item["MCCQT"] ?? "",
-        "field_invoice_date" => $invoice_date->format("Y-m-d"),
-        "field_invoice_amount" => $item["Amount"] ?? 0,
-        "field_invoice_discount_amount" => $item["TotalDiscountAmount"] ?? 0,
-        "field_invoice_amount_without_vat" => $item["TotalAmountWithoutVat"] ?? 0,
-        "field_invoice_vat_amount" => $item["TotalVATAmount"] ?? 0,
-        "field_invoice_vat_rate" => $item["VatRate"] ?? 0,
-        "field_invoice_payment" => match ($item['PaymentMethod'] ?? '') {
-          'TM' => 'inv_tm',
-          'CK' => 'inv_ck',
-          default => 'inv_tm_ck',
-        },
-        "field_invoice_total_amount" => $item["TotalAmount"] ?? 0,
-        "field_invoice_accountant" => $item["Accountant"] ?? "",
-        "field_invoice_refno" => $item["RefNo"] ?? "",
-        "field_invoice_relateds" => $item["InvoiceRelateds"]["InvoiceId"] ?? "",
-        "field_invoice_items" => $product,
-        "field_invoice_accounting_date" => $accounting_date ? $accounting_date->format("Y-m-d") : NULL,
-      ];
+      $count = count($items);
+      $skip += $count;
+      $total = (int) ($response["Data"]["Total"] ?? 0);
+
+      if ($count < self::PAGE_SIZE || ($total > 0 && $skip >= $total)) {
+        break;
+      }
+
+      sleep(self::TIME_DELAY);
     }
 
     return $data;
   }
 
   /**
-   * Accounting an invoice.
+   * {@inheritdoc}
    */
   public function accounting(array $config, array $data): array {
-    $subscribers = $config["invoice_subscribers"];
-    $organization = $config["invoice_organization"];
+    $invoice_id = $data["invoice_id"] ?? [];
 
-    $end_point = "/inbot/api/{$subscribers}/{$organization}/invoices/invoiceaccountingdateV2";
+    if (empty($invoice_id)) {
+      throw new \DomainException("Không tìm thấy hóa đơn cần hạch toán");
+    }
 
-    $response = $this->callApi(
-      $config["invoice_appurl"] . $end_point,
-      [
-        "Content-Type" => "application/json",
-        "Authorization" => "Bearer {$config["invoice_jwt_token"]}",
-        "ClientId" => "{$config["invoice_client"]}",
-      ],
-      [
+    // Tài liệu: gửi mỗi InvoiceId là bỏ đánh dấu hạch toán, gửi kèm thông tin
+    // kế toán là đánh dấu đã hạch toán.
+    $payload = ["InvoiceId" => array_values($invoice_id)];
+
+    if (!empty($data["accountant"])) {
+      $payload += [
         "Accountant" => $data["accountant"],
-        "AccountingDate" => $data["accountant_date"],
-        "InvoiceId" => $data["invoice_id"],
-        "RefNo" => $data["ref_no"],
-      ],
-    );
-
-    if (!$response["Success"]) {
-      throw new \DomainException($response["Message"]);
+        "AccountingDate" => $data["accountant_date"] ?? date("Y-m-d"),
+        "RefNo" => $data["ref_no"] ?? "",
+      ];
     }
 
-    return $response;
-
+    return $this->api2(
+      $this->request(
+        $config["invoice_appurl"],
+        $this->inbotPath($config, "invoices/invoiceaccountingdateV2"),
+        $this->inbotHeaders($config),
+        $payload
+      ),
+      "Hạch toán hóa đơn thất bại"
+    );
   }
 
   /**
-   * Download PDF.
+   * {@inheritdoc}
    */
-  public function download(array $config, array $data): mixed {
-    $subscribers = $config["invoice_subscribers"];
-    $organization = $config["invoice_organization"];
-    $jwt_token = $config["invoice_jwt_token"];
-    $client = $config["invoice_client"];
+  public function download(array $config, array $ids): string {
+    $ids = array_values(array_unique(array_filter($ids)));
 
-    $key = $this->keyDownload($config, $data);
-    if (!$key["Success"]) {
-      throw new \DomainException("Download key error");
+    if (empty($ids)) {
+      throw new \DomainException("Không tìm thấy hóa đơn cần tải");
     }
 
-    $end_point = "/inbot/api/{$subscribers}/{$organization}/download/{$key["Data"]["Key"]}/download";
-
-    sleep(10);
-
-    return $this->callApi(
-      $config["invoice_appurl"] . $end_point,
-      [
-        "Content-Type" => "application/json",
-        "Authorization" => "Bearer {$jwt_token}",
-        "ClientId" => "{$client}",
-      ],
-      [],
-      "GET"
-    );
-  }
-
-  /**
-   * Preview pdf.
-   */
-  public function preview(array $config, array $data): array {
-    $end_point = "/api/integration/invoice/unpublishview";
-    $dataInv = $this->getData($config["invoice_template"], $data);
-
-    $response = $this->callApi(
-      $config["invoice_host"] . $end_point,
-      [
-        "Content-Type" => "application/json",
-        "Authorization" => "Bearer {$config["invoice_token"]}",
-      ],
-      reset($dataInv),
-      "POST",
-      200
+    $key = $this->api2(
+      $this->request(
+        $config["invoice_appurl"],
+        $this->inbotPath($config, "download/zip"),
+        $this->inbotHeaders($config),
+        [
+          "FileType" => 1,
+          "LstInvID" => $ids,
+        ]
+      ),
+      "Không tạo được khoá tải file"
     );
 
-    if (!$response["success"]) {
-      throw new \DomainException($response["errorCode"]);
+    $download_key = (string) ($key["Data"]["Key"] ?? "");
+
+    if ($download_key === "") {
+      throw new \DomainException("MISA không trả về khoá tải file");
     }
 
-    return $response;
+    $path = $this->inbotPath($config, "download/{$download_key}/download");
+
+    // Gói ZIP được nén bất đồng bộ, hỏi lại tới khi có file thay vì nghỉ cứng.
+    for ($attempt = 1; $attempt <= self::FILE_ATTEMPTS; $attempt++) {
+      $response = $this->request(
+        $config["invoice_appurl"],
+        $path,
+        $this->inbotHeaders($config),
+        NULL,
+        "GET",
+        self::LONG_TIMEOUT
+      );
+
+      $binary = $this->toBinary($response);
+
+      if ($binary !== "") {
+        return $binary;
+      }
+
+      if ($attempt < self::FILE_ATTEMPTS) {
+        sleep(self::TIME_DELAY);
+      }
+    }
+
+    return "";
   }
 
   /**
-   * Lấy trạng thái hóa đơn đã phát hành.
+   * Phát hành hoặc thay thế hóa đơn, hai việc dùng chung một endpoint.
+   *
+   * @param array $config
+   *   Cấu hình kết nối, kèm khoá "invoice_template".
+   * @param array $data
+   *   Dữ liệu hóa đơn, đánh khoá theo uuid.
+   * @param string $type
+   *   "create" hoặc "replace".
+   * @param bool $get_file
+   *   TRUE để tải kèm PDF sau khi phát hành.
+   *
+   * @return array
+   *   Kết quả đánh khoá theo RefID.
    */
-  public function status(array $config, string $code, array $params) {
-    $endPoint = "/api/integration/invoice/status";
+  private function publish(array $config, array $data, string $type, bool $get_file): array {
+    $invoices = $this->buildInvoices($config["invoice_template"] ?? [], $data, $type);
 
-    $query = http_build_query([
-      "inputType" => "1",
-      "invoiceCalcu" => $params["calcu"] ?? "false",
-      "invoiceWithCode" => $params["withCode"] ?? "true",
-    ]);
+    if (empty($invoices)) {
+      throw new \DomainException("Không có dữ liệu hóa đơn để phát hành");
+    }
 
-    return $this->callApi(
-      $config["invoice_host"] . $endPoint . "?" . $query,
-      [
-        "Content-Type" => "application/json",
-        "Authorization" => "Bearer {$config["invoice_token"]}",
-      ],
-      [
-        $code,
-      ],
+    $payload = [
+      "SignType" => $this->signType($config, $invoices),
+      // array_values vì $invoices đánh khoá theo uuid, để nguyên thì
+      // json_encode sinh ra object chứ không phải mảng.
+      "InvoiceData" => array_values($invoices),
+      "PublishInvoiceData" => NULL,
+    ];
+
+    $response = NULL;
+
+    // "InvoiceNumberNotCotinuous" và "InvoiceDuplicated" là lỗi tranh chấp số
+    // hóa đơn, tài liệu nói rõ cứ gửi lại chứ không phải sửa dữ liệu.
+    for ($attempt = 1; $attempt <= self::PUBLISH_ATTEMPTS; $attempt++) {
+      try {
+        $response = $this->integration(
+          $this->request(
+            $config["invoice_host"],
+            "/api/integration/invoice",
+            $this->bearer($config),
+            $payload,
+            "POST",
+            self::LONG_TIMEOUT
+          ),
+          "Phát hành hóa đơn thất bại"
+        );
+
+        break;
+      }
+      catch (InvoiceRetryException $e) {
+        if ($attempt >= self::PUBLISH_ATTEMPTS) {
+          throw new \DomainException($e->getMessage(), 0, $e);
+        }
+
+        $this->logger->warning("Phát hành lại hóa đơn (lần @attempt): @message", [
+          "@attempt" => $attempt + 1,
+          "@message" => $e->getMessage(),
+        ]);
+
+        sleep(self::TIME_DELAY);
+      }
+    }
+
+    // Ký đồng bộ thì kết quả nằm ở publishInvoiceResult; ký bất đồng bộ
+    // (SignType 3, 6) mới chỉ tạo XML nên phải đọc createInvoiceResult.
+    $results = $this->keyBy(
+      $this->decodeNested($this->field($response, "publishInvoiceResult"))
+        ?: $this->decodeNested($this->field($response, "createInvoiceResult")),
+      "RefID"
     );
+
+    if (empty($results)) {
+      throw new \DomainException($this->publishErrors($response));
+    }
+
+    if (!$get_file) {
+      return $results;
+    }
+
+    // Gọi Download một lần cho cả lô thay vì mỗi hóa đơn một lần.
+    $transactions = [];
+
+    foreach ($results as $ref => $result) {
+      if (empty($result["ErrorCode"]) && !empty($result["TransactionID"])) {
+        $transactions[$result["TransactionID"]] = $ref;
+      }
+    }
+
+    if (empty($transactions)) {
+      return $results;
+    }
+
+    try {
+      foreach ($this->pdf($config, array_keys($transactions)) as $transaction => $file) {
+        $ref = $transactions[$transaction] ?? NULL;
+
+        if ($ref !== NULL) {
+          $results[$ref]["base64"] = $file["Data"];
+        }
+      }
+    }
+    catch (\DomainException $e) {
+      // Hóa đơn đã phát hành thành công rồi, thiếu PDF không được phép làm
+      // hỏng cả lệnh; tải lại sau bằng nút tải PDF.
+      $this->logger->warning(
+        "Đã phát hành hóa đơn nhưng chưa tải được PDF: @message",
+        ["@message" => $e->getMessage()]
+      );
+    }
+
+    return $results;
   }
 
   /**
-   * {@inheritDoc}
+   * Chọn kiểu ký phù hợp với loại hóa đơn đang phát hành.
+   *
+   * @param array $config
+   *   Cấu hình kết nối, có thể ép kiểu ký qua khoá "invoice_sign_type".
+   * @param array $invoices
+   *   Payload hóa đơn đã dựng.
+   *
+   * @return int
+   *   Giá trị SignType gửi cho MISA.
    */
-  private function getData(array $template, array $data, string $type = "create") {
-    $data_invoice = [];
+  private function signType(array $config, array $invoices): int {
+    if (!empty($config["invoice_sign_type"])) {
+      return (int) $config["invoice_sign_type"];
+    }
+
+    // Tài liệu ràng buộc kiểu ký theo loại hóa đơn: khai là hóa đơn từ máy tính
+    // tiền mà vẫn ký kiểu 2 thì MISA từ chối hoặc phát hành sai loại.
+    $first = reset($invoices) ?: [];
+
+    return !empty($first["IsInvoiceCalculatingMachine"])
+      ? self::SIGN_TYPE_MACHINE
+      : self::SIGN_TYPE_DEFAULT;
+  }
+
+  /**
+   * Gom thông điệp lỗi khi MISA không trả về hóa đơn nào.
+   *
+   * @param mixed $response
+   *   Phản hồi của endpoint phát hành.
+   *
+   * @return string
+   *   Thông điệp hiển thị được cho người dùng.
+   */
+  private function publishErrors(mixed $response): string {
+    $messages = [];
+
+    foreach ($this->decodeNested($this->field((array) $response, "errors")) as $error) {
+      if (is_string($error)) {
+        $messages[] = $error;
+        continue;
+      }
+
+      if (is_array($error)) {
+        $messages[] = (string) (
+          $error["DescriptionErrorCode"]
+          ?? $error["ErrorCode"]
+          ?? $error["Message"]
+          ?? ""
+        );
+      }
+    }
+
+    $messages = array_filter($messages);
+
+    return $messages
+      ? implode("; ", $messages)
+      : "MISA không trả về kết quả phát hành";
+  }
+
+  /**
+   * Dựng payload hóa đơn theo cấu trúc MISA.
+   *
+   * @param array $template
+   *   Mẫu số / ký hiệu hóa đơn đang chọn.
+   * @param array $data
+   *   Dữ liệu hóa đơn, đánh khoá theo uuid.
+   * @param string $type
+   *   "create" hoặc "replace".
+   *
+   * @return array
+   *   Payload đánh khoá theo uuid.
+   */
+  private function buildInvoices(array $template, array $data, string $type = "create"): array {
+    $invoices = [];
 
     foreach ($data as $key => $item) {
-      $invoice_total_amount = $item["invoice_total_amount"] ?? 0;
-      $invoice_total_amount_words = $this->getNumberToWords->handle($invoice_total_amount);
-      $buildData = $this->buildProducts($item["products"]);
+      if (!is_array($item)) {
+        continue;
+      }
 
-      $data_invoice[$key] = [
+      $total_amount = (float) ($item["invoice_total_amount"] ?? 0);
+      $lines = $this->buildProducts($item["products"] ?? []);
+
+      $invoices[$key] = [
         "RefID" => $item["invoice_uuid"] ?? $this->uuid->generate(),
+        "InvTemplateNo" => $template["pattern"] ?? NULL,
         "InvSeries" => $template["serial"] ?? "",
         "InvoiceName" => $item["invoice_title"] ?? "",
-        "IsInvoiceCalculatingMachine" => TRUE,
-        "InvDate" => date("Y-m-d"),
+        "IsInvoiceCalculatingMachine" => (bool) ($item["invoice_machine"] ?? TRUE),
+        "InvDate" => $item["invoice_date"] ?? date("Y-m-d"),
         "CurrencyCode" => $item["invoice_currency_code"] ?? "VND",
         "ExchangeRate" => 1,
         "PaymentMethodName" => $item["invoice_payment"] ?? NULL,
-        "BuyerLegalName" => $item["invoice_buyer_legal"] ?? "Khách vãn lai",
+        // BuyerLegalName và BuyerAddress là trường bắt buộc, để NULL thì MISA
+        // trả RequireError_*.
+        "BuyerLegalName" => ($item["invoice_buyer_legal"] ?? "") ?: "Khách vãng lai",
         "BuyerCode" => $item["invoice_buyer_code"] ?? NULL,
-        "BuyerFullName" => $item["invoice_buyer_name"] ?? "NGƯỜI MUA KHÔNG LẤY HÓA ĐƠN",
+        "BuyerFullName" => ($item["invoice_buyer_name"] ?? "") ?: "NGƯỜI MUA KHÔNG LẤY HÓA ĐƠN",
         "BuyerTaxCode" => $item["invoice_buyer_taxcode"] ?? NULL,
-        "BuyerAddress" => $item["invoice_buyer_address"] ?? NULL,
+        "BuyerAddress" => (string) ($item["invoice_buyer_address"] ?? ""),
         "BuyerPhoneNumber" => $item["invoice_buyer_phone"] ?? NULL,
         "BuyerEmail" => $item["invoice_buyer_email"] ?? NULL,
         "ContactName" => $item["invoice_buyer_name"] ?? NULL,
-        "TotalSaleAmountOC" => $item["invoice_amount"] ?? 0,
-        "TotalSaleAmount" => $item["invoice_amount"] ?? 0,
-        "TotalDiscountAmountOC" => $item["invoice_discount_amount"] ?? 0,
-        "TotalDiscountAmount" => $item["invoice_discount_amount"] ?? 0,
-        "TotalAmountWithoutVATOC" => $item["invoice_amount_without_vat"] ?? 0,
-        "TotalAmountWithoutVAT" => $item["invoice_amount_without_vat"] ?? 0,
-        "TotalVATAmountOC" => $item["invoice_vat_amount"] ?? 0,
-        "TotalVATAmount" => $item["invoice_vat_amount"] ?? 0,
-        "TotalAmountOC" => $invoice_total_amount,
-        "TotalAmount" => $invoice_total_amount,
-        "TotalAmountInWords" => $invoice_total_amount_words,
+        "TotalSaleAmountOC" => (float) ($item["invoice_amount"] ?? 0),
+        "TotalSaleAmount" => (float) ($item["invoice_amount"] ?? 0),
+        "TotalDiscountAmountOC" => (float) ($item["invoice_discount_amount"] ?? 0),
+        "TotalDiscountAmount" => (float) ($item["invoice_discount_amount"] ?? 0),
+        "TotalAmountWithoutVATOC" => (float) ($item["invoice_amount_without_vat"] ?? 0),
+        "TotalAmountWithoutVAT" => (float) ($item["invoice_amount_without_vat"] ?? 0),
+        "TotalVATAmountOC" => (float) ($item["invoice_vat_amount"] ?? 0),
+        "TotalVATAmount" => (float) ($item["invoice_vat_amount"] ?? 0),
+        "TotalAmountOC" => $total_amount,
+        "TotalAmount" => $total_amount,
+        "TotalAmountInWords" => $this->getNumberToWords->handle($total_amount),
         "IsTaxReduction43" => FALSE,
-        "OriginalInvoiceDetail" => $buildData["product"],
-        "TaxRateInfo" => array_values($buildData["tax_info"]),
+        "OriginalInvoiceDetail" => $lines["products"],
+        "TaxRateInfo" => array_values($lines["tax_info"]),
         "OptionUserDefined" => [
           "MainCurrency" => "VND",
           "AmountDecimalDigits" => "0",
@@ -523,197 +772,616 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
           "ExchangRateDecimalDigits" => NULL,
         ],
       ];
-  
-      if ($type == "replace") {
-        $data_invoice[$key] += $this->buildReplace($data["replace"]);
+
+      if ($type === "replace") {
+        if (empty($item["replace"])) {
+          throw new \DomainException("Thiếu thông tin hóa đơn bị thay thế");
+        }
+
+        $invoices[$key] += $this->buildReplace($item["replace"]);
       }
     }
 
-    return $data_invoice;
+    return $invoices;
   }
 
   /**
-   * {@inheritDoc}
+   * Dựng dòng hàng hoá kèm bảng tổng hợp theo thuế suất.
+   *
+   * @param array $products
+   *   Danh sách dòng hàng của hóa đơn.
+   *
+   * @return array
+   *   Gồm "products" (dòng chi tiết) và "tax_info" (tổng hợp theo thuế suất).
    */
   private function buildProducts(array $products): array {
     $line = 1;
     $result = [];
-    $taxRateInfo = [];
+    $tax_info = [];
 
-    foreach ($products as $p) {
-      $type = (int) ($p["type"] ?? 1);
-      $sort = in_array($type, [1, 2], TRUE) ? $line : NULL;
+    foreach ($products as $product) {
+      $type = (int) ($product["type"] ?? 1);
+      $vat_rate_name = $this->vatRateName($product["vat_rate"] ?? 0, $product["name"] ?? "");
 
-      $vatRate = (float) ($p['vat_rate'] ?? 0);
-      $vatRateName = in_array($vatRate, [0.0, 5.0, 8.0, 10.0], TRUE)
-        ? $vatRate . '%'
-        : 'KHAC:' . $vatRate . '%';
+      $amount_without_vat = (float) ($product["amount_without_vat"] ?? 0);
+      $vat_amount = (float) ($product["vat_amount"] ?? 0);
 
-      if (!isset($taxRateInfo[$vatRateName])) {
-        $taxRateInfo[$vatRateName] = [
-          'VATRateName' => $vatRateName,
-          'AmountWithoutVATOC' => 0,
-          'VATAmountOC' => 0,
+      if (!isset($tax_info[$vat_rate_name])) {
+        $tax_info[$vat_rate_name] = [
+          "VATRateName" => $vat_rate_name,
+          "AmountWithoutVATOC" => 0,
+          "VATAmountOC" => 0,
         ];
       }
 
-      $taxRateInfo[$vatRateName]['AmountWithoutVATOC']
-        += (float) ($p['amount_without_vat'] ?? 0);
-
-      $taxRateInfo[$vatRateName]['VATAmountOC']
-        += (float) ($p['vat_amount'] ?? 0);
+      $tax_info[$vat_rate_name]["AmountWithoutVATOC"] += $amount_without_vat;
+      $tax_info[$vat_rate_name]["VATAmountOC"] += $vat_amount;
 
       $result[] = [
         "ItemType" => $type,
         "LineNumber" => $line,
-        "SortOrder" => $sort,
-        "ItemCode" => $p["code"] ?? NULL,
-        "ItemName" => $p["name"] ?? NULL,
-        "UnitName" => $p["unit"] ?? NULL,
-        "Quantity" => (float) ($p["quantity"] ?? 0),
-        "UnitPrice" => (float) ($p["price"] ?? 0),
-        "DiscountRate" => (int) ($p["discount"] ?? 0),
-        "DiscountAmountOC" => (float) ($p["discount_amount"] ?? 0),
-        "DiscountAmount" => (float) ($p["discount_amount"] ?? 0),
-        "AmountOC" => (float) ($p["amount"] ?? 0),
-        "Amount" => (float) ($p["amount"] ?? 0),
-        "AmountWithoutVATOC" => (float) ($p["amount_without_vat"] ?? 0),
-        "VATRateName" => $vatRateName,
-        "VATAmountOC" => (float) ($p["vat_amount"] ?? 0),
-        "VATAmount" => (float) ($p["vat_amount"] ?? 0),
+        // Dòng ghi chú / khuyến mại không đánh số thứ tự trên bản in.
+        "SortOrder" => in_array($type, [1, 2], TRUE) ? $line : NULL,
+        "ItemCode" => $product["code"] ?? NULL,
+        "ItemName" => $product["name"] ?? NULL,
+        "UnitName" => $product["unit"] ?? NULL,
+        "Quantity" => (float) ($product["quantity"] ?? 0),
+        "UnitPrice" => (float) ($product["price"] ?? 0),
+        "DiscountRate" => (float) ($product["discount_rate"] ?? 0),
+        "DiscountAmountOC" => (float) ($product["discount_amount"] ?? 0),
+        "DiscountAmount" => (float) ($product["discount_amount"] ?? 0),
+        "AmountOC" => (float) ($product["amount"] ?? 0),
+        "Amount" => (float) ($product["amount"] ?? 0),
+        "AmountWithoutVATOC" => $amount_without_vat,
+        "AmountWithoutVAT" => $amount_without_vat,
+        "VATRateName" => $vat_rate_name,
+        "VATAmountOC" => $vat_amount,
+        "VATAmount" => $vat_amount,
       ];
 
       $line++;
     }
 
     return [
-      "product" => $result,
-      "tax_info" => $taxRateInfo,
+      "products" => $result,
+      "tax_info" => $tax_info,
     ];
   }
 
   /**
-   * {@inheritDoc}
+   * Đổi thuế suất của một dòng hàng sang tên thuế suất MISA chấp nhận.
+   *
+   * Tài liệu chỉ nhận "KCT", "KKKNT", "0%", "5%", "8%", "10%" và "KHAC:x%".
+   *
+   * @param mixed $rate
+   *   Thuế suất thô, số hoặc tên thuế suất đặc biệt.
+   * @param string $name
+   *   Tên hàng hoá, chỉ dùng để báo lỗi cho dễ tìm.
+   *
+   * @return string
+   *   Tên thuế suất gửi cho MISA.
+   */
+  private function vatRateName(mixed $rate, string $name): string {
+    if (is_string($rate)) {
+      $special = strtoupper(trim($rate));
+
+      if (in_array($special, self::SPECIAL_VAT_RATES, TRUE)) {
+        return $special;
+      }
+    }
+
+    $rate = (float) $rate;
+
+    if (in_array($rate, self::STANDARD_VAT_RATES, TRUE)) {
+      return $rate . "%";
+    }
+
+    // "KHAC:-1%" không phải thuế suất hợp lệ; báo ngay tại chỗ thay vì để MISA
+    // trả về InvoiceDetail_VATRateName không rõ dòng nào sai.
+    if ($rate < 0) {
+      throw new \DomainException(sprintf(
+        'Thuế suất không hợp lệ (%s) ở dòng hàng "%s". Dùng KCT hoặc KKKNT cho hàng không chịu thuế.',
+        $rate,
+        $name
+      ));
+    }
+
+    return "KHAC:" . $rate . "%";
+  }
+
+  /**
+   * Khối thông tin hóa đơn gốc khi phát hành hóa đơn thay thế.
+   *
+   * @param array $replace
+   *   Thông tin hóa đơn bị thay thế.
+   *
+   * @return array
+   *   Các trường Org* của MISA.
    */
   private function buildReplace(array $replace): array {
     return [
+      // 1 = hóa đơn thay thế (2 = hóa đơn điều chỉnh).
       "ReferenceType" => 1,
+      // 1 = hóa đơn theo Nghị định 123 (3 = theo Nghị định 51).
       "OrgInvoiceType" => 1,
-      "OrgInvDate" => date("Y-m-d"),
+      "OrgInvDate" => $replace["invoice_date"] ?? date("Y-m-d"),
       "OrgInvNo" => $replace["invoice_no"] ?? NULL,
       "OrgInvTemplateNo" => $replace["invoice_template_no"] ?? NULL,
       "OrgInvSeries" => $replace["invoice_template_series"] ?? NULL,
+      // Lý do thay thế, in trên bản thể hiện của hóa đơn mới.
+      "InvoiceNote" => $replace["invoice_note"] ?? NULL,
     ];
   }
 
   /**
-   * {@inheritDoc}
+   * Ánh xạ một hóa đơn đầu vào của MISA sang tên field của entity invoice.
+   *
+   * @param array $item
+   *   Hóa đơn thô từ API.
+   *
+   * @return array
+   *   Mảng field => giá trị.
    */
-  private function token(array $config): array {
-    return $this->callApi(
-      $config["invoice_host"] . "/api/integration/auth/token",
-      [
-        "Content-Type" => "application/json",
-      ],
-      [
-        "appid" => $config["invoice_appid"],
-        "taxcode" => $config["invoice_taxcode"],
-        "username" => $config["invoice_username"],
-        "password" => $config["invoice_password"],
-      ]
-    );
+  private function mapInputInvoice(array $item): array {
+    $products = [];
+
+    foreach ($item["Items"] ?? [] as $product) {
+      $products[] = [
+        "item_name" => $product["ItemName"] ?? "",
+        "item_code" => $product["ItemCode"] ?? "",
+        "item_unit" => $product["UnitName"] ?? "",
+        "item_quantity" => $product["Quantity"] ?? 0,
+        "item_price" => $product["UnitPrice"] ?? 0,
+        "item_amount" => $product["Amount"] ?? 0,
+        "item_discount_rate" => $product["DiscountRate"] ?? 0,
+        "item_discount_amount" => $product["DiscountAmount"] ?? 0,
+        "item_amount_without_vat" => $product["AmountWithoutVat"] ?? 0,
+        "item_vat_rate" => $product["VatRate"] ?? 0,
+        "item_vat_amount" => $product["VatAmount"] ?? 0,
+        "item_total_amount" => $product["Amount"] ?? 0,
+        "item_type" => $product["Nature"] ?? 0,
+      ];
+    }
+
+    // InvoiceRelateds khi thì là một object, khi thì là danh sách.
+    $related = $item["InvoiceRelateds"] ?? [];
+    if (!is_array($related)) {
+      $related = [];
+    }
+    elseif (isset($related["InvoiceId"])) {
+      $related = [$related];
+    }
+    $related = reset($related) ?: [];
+
+    return [
+      "field_invoice_name" => $item["InvoiceName"] ?? $item["TitleInvoiceText"] ?? "Hóa đơn đầu vào",
+      "field_invoice_id" => $item["InvoiceId"] ?? "",
+      "field_invoice_no" => $item["InvoiceNo"] ?? "",
+      "field_invoice_pattern" => $item["TemplateNo"] ?? "",
+      "field_invoice_serial" => ($item["TemplateNo"] ?? "") . ($item["Series"] ?? ""),
+      "field_invoice_status" => $this->mapStatus($item["StatusInvoice"] ?? NULL),
+      "field_invoice_seller_name" => $item["SellerName"] ?? "",
+      "field_invoice_seller_taxcode" => $item["SellerTaxCode"] ?? "",
+      "field_invoice_seller_address" => $item["SellerAddress"] ?? "",
+      "field_invoice_buyer_name" => $item["BuyerName"] ?? "",
+      "field_invoice_buyer_taxcode" => $item["BuyerTaxCode"] ?? "",
+      "field_invoice_buyer_address" => $item["BuyerAddress"] ?? "",
+      "field_invoice_mccqt" => $item["MCCQT"] ?? "",
+      "field_invoice_date" => $this->formatDate($item["InvoiceDate"] ?? NULL) ?? date("Y-m-d"),
+      "field_invoice_amount" => $item["Amount"] ?? $item["TotalSaleAmount"] ?? 0,
+      "field_invoice_discount_amount" => $item["TotalDiscountAmount"] ?? 0,
+      "field_invoice_amount_without_vat" => $item["TotalAmountWithoutVat"] ?? 0,
+      "field_invoice_vat_amount" => $item["TotalVATAmount"] ?? 0,
+      "field_invoice_vat_rate" => $item["VatRate"] ?? 0,
+      "field_invoice_payment" => match ($item["PaymentMethod"] ?? "") {
+        "TM" => "inv_tm",
+        "CK" => "inv_ck",
+        default => "inv_tm_ck",
+      },
+      "field_invoice_total_amount" => $item["TotalAmount"] ?? 0,
+      "field_invoice_accountant" => $item["Accountant"] ?? "",
+      "field_invoice_refno" => $item["RefNo"] ?? "",
+      "field_invoice_relateds" => $related["InvoiceId"] ?? "",
+      "field_invoice_items" => $products,
+      "field_invoice_accounting_date" => $this->formatDate($item["AccountingDate"] ?? NULL),
+    ];
   }
 
   /**
-   * {@inheritDoc}
+   * Ép trạng thái MISA về khoảng giá trị field_invoice_status cho phép.
+   *
+   * @param mixed $status
+   *   Giá trị StatusInvoice của MISA.
+   *
+   * @return int
+   *   0-7, trong đó 7 là "HĐ chưa xác định".
    */
-  private function secureToken(array $config): array {
-    return $this->callApi(
-      $config["invoice_host"] . "/api2/validateuser",
-      [
-        "Content-Type" => "application/json",
-        "appid" => $config["invoice_appid"],
-        "companytaxcode" => $config["invoice_taxcode"],
-        "username" => $config["invoice_username"],
-      ],
-      [
-        "password" => $config["invoice_password"],
-      ]
-    );
+  private function mapStatus(mixed $status): int {
+    if (!is_numeric($status)) {
+      return 7;
+    }
+
+    $status = (int) $status;
+    return ($status >= 0 && $status <= 7) ? $status : 7;
   }
 
   /**
-   * {@inheritDoc}
+   * Đổi chuỗi ngày của MISA sang Y-m-d.
+   *
+   * @param mixed $value
+   *   Chuỗi ngày thô.
+   *
+   * @return string|null
+   *   Ngày theo Y-m-d, NULL khi không đọc được.
    */
-  private function jwtToken(array $config, string $token): array {
-    return $this->callApi(
-      $config["invoice_host"] . "/api2/auth/jwttoken",
-      [
-        "Content-Type" => "application/json",
-        "appid" => $config["invoice_appid"],
-        "companytaxcode" => $config["invoice_taxcode"],
-        "username" => $config["invoice_username"],
-        "securetoken" => substr(
-          $token,
-          strpos($token, ";") + 1
-        ),
-      ],
-      []
-    );
+  private function formatDate(mixed $value): ?string {
+    if (empty($value) || !is_string($value)) {
+      return NULL;
+    }
+
+    try {
+      return (new \DateTime($value))->format("Y-m-d");
+    }
+    catch (\Throwable) {
+      // Bắt \Throwable chứ không phải \Exception: PHP 8.3 ném
+      // DateMalformedStringException và một số môi trường (Xdebug) làm hỏng
+      // chuỗi xử lý ngoại lệ đó thành lỗi nghiêm trọng.
+      return NULL;
+    }
   }
 
   /**
-   * {@inheritDoc}
+   * Gọi API MISA.
+   *
+   * @param string $base
+   *   Base URL lấy từ cấu hình.
+   * @param string $path
+   *   Đường dẫn endpoint, có thể kèm query string.
+   * @param array $headers
+   *   Header bổ sung.
+   * @param array|null $payload
+   *   Body JSON; NULL nghĩa là không gửi body (dùng cho GET).
+   * @param string $method
+   *   Phương thức HTTP.
+   * @param int $timeout
+   *   Timeout tính bằng giây.
+   *
+   * @return mixed
+   *   Mảng đã giải mã JSON, hoặc chuỗi nhị phân với phản hồi dạng file.
+   *
+   * @throws \DomainException
+   *   Khi không kết nối được hoặc MISA trả mã lỗi HTTP.
+   * @throws InvoiceTokenException
+   *   Khi MISA từ chối vì token.
    */
-  private function subscribers(array $config): array {
-    return $this->callApi(
-      $config["invoice_appurl"] . "/inbot/api/subscribers/code/" . $config["invoice_taxcode"],
-      [
-        "Content-Type" => "application/json",
-        "ClientId" => $config["invoice_client"],
-      ],
-      [],
-      "GET",
-    );
+  private function request(
+    string $base,
+    string $path,
+    array $headers = [],
+    ?array $payload = NULL,
+    string $method = "POST",
+    int $timeout = 30,
+  ): mixed {
+    if (trim($base) === "") {
+      throw new \DomainException("Chưa cấu hình địa chỉ máy chủ MISA");
+    }
+
+    $options = [
+      "headers" => ["Content-Type" => "application/json"] + $headers,
+      "timeout" => $timeout,
+      "http_errors" => FALSE,
+    ];
+
+    if ($payload !== NULL) {
+      $options["json"] = $payload;
+    }
+
+    $url = rtrim($base, "/") . "/" . ltrim($path, "/");
+
+    try {
+      $response = $this->client->request($method, $url, $options);
+    }
+    catch (GuzzleException $e) {
+      throw new \DomainException("Không kết nối được MISA: " . $e->getMessage(), 0, $e);
+    }
+
+    $status = $response->getStatusCode();
+    $body = (string) $response->getBody();
+    $type = $response->getHeaderLine("Content-Type");
+
+    if (str_contains($type, "zip") || str_contains($type, "octet-stream")) {
+      return $body;
+    }
+
+    $decoded = json_decode($body, TRUE);
+
+    if ($status === 401 || $status === 403) {
+      throw new InvoiceTokenException("MISA từ chối token (HTTP {$status})");
+    }
+
+    if ($status >= 400) {
+      $message = is_array($decoded)
+        ? (string) ($decoded["Message"] ?? $decoded["descriptionErrorCode"] ?? $decoded["errorCode"] ?? "")
+        : "";
+
+      $this->logger->error("MISA @method @url trả về HTTP @status: @body", [
+        "@method" => $method,
+        "@url" => $url,
+        "@status" => $status,
+        "@body" => mb_substr($body, 0, 1000),
+      ]);
+
+      throw new \DomainException(
+        $message !== "" ? $message : "MISA trả về lỗi HTTP {$status}"
+      );
+    }
+
+    return $decoded === NULL && $body !== "" ? $body : $decoded;
   }
 
   /**
-   * {@inheritDoc}
+   * Bóc phong bì của nhóm API "/api/integration" (khoá viết thường).
+   *
+   * @param mixed $response
+   *   Phản hồi đã giải mã.
+   * @param string $fallback
+   *   Thông điệp dùng khi MISA không nói rõ lỗi.
+   *
+   * @return array
+   *   Phản hồi hợp lệ.
    */
-  private function organization(array $config, array $jwt, string $subscribers): array {
-    return $this->callApi(
-      $config["invoice_appurl"] . "/inbot/api/{$subscribers}/organizations",
-      [
-        "Content-Type" => "application/json",
-        "ClientId" => $config["invoice_client"],
-        "Authorization" => "Bearer {$jwt["AccessToken"]}",
-      ],
-      [],
-      "GET"
-    );
+  private function integration(mixed $response, string $fallback = "MISA từ chối yêu cầu"): array {
+    if (!is_array($response)) {
+      throw new \DomainException($fallback);
+    }
+
+    // Nhóm API này không nhất quán hoa/thường: /auth/token trả
+    // "Success"/"Data"/"ErrorCode" còn /invoice trả "success"/"data"/
+    // "errorCode". Đọc cả hai kiểu thay vì đoán theo từng endpoint.
+    if (empty($response["success"]) && empty($response["Success"])) {
+      $code = (string) ($response["errorCode"] ?? $response["ErrorCode"] ?? "");
+      $this->assertNotTokenError($code);
+
+      $message = (string) (
+        $response["descriptionErrorCode"]
+        ?? $response["message"]
+        ?? (is_string($response["Errors"] ?? NULL) ? $response["Errors"] : NULL)
+        ?? $code
+      );
+
+      throw new \DomainException($message !== "" ? $message : $fallback);
+    }
+
+    return $response;
   }
 
   /**
-   * {@inheritDoc}
+   * Đọc một khoá của phong bì integration bất kể viết hoa hay thường.
+   *
+   * @param array $response
+   *   Phản hồi đã bóc phong bì.
+   * @param string $key
+   *   Tên khoá dạng viết thường, ví dụ "data".
+   *
+   * @return mixed
+   *   Giá trị tương ứng, NULL khi không có.
    */
-  private function keyDownload(array $config, array $id): array {
-    $subscribers = $config["invoice_subscribers"];
-    $organization = $config["invoice_organization"];
+  private function field(array $response, string $key): mixed {
+    return $response[$key] ?? $response[ucfirst($key)] ?? NULL;
+  }
 
-    $end_point = "/inbot/api/{$subscribers}/{$organization}/download/zip";
+  /**
+   * Bóc phong bì của nhóm API "/api2" và "/inbot" (khoá viết hoa).
+   *
+   * @param mixed $response
+   *   Phản hồi đã giải mã.
+   * @param string $fallback
+   *   Thông điệp dùng khi MISA không nói rõ lỗi.
+   *
+   * @return array
+   *   Phản hồi hợp lệ.
+   */
+  private function api2(mixed $response, string $fallback = "MISA từ chối yêu cầu"): array {
+    if (!is_array($response)) {
+      throw new \DomainException($fallback);
+    }
 
-    return $this->callApi(
-      $config["invoice_appurl"] . $end_point,
-      [
-        "Content-Type" => "application/json",
-        "ClientId" => "{$config["invoice_client"]}",
-        "Authorization" => "Bearer {$config["invoice_jwt_token"]}",
-      ],
-      [
-        "FileType" => 1,
-        "LstInvID" => $id,
-      ]
-    );
+    if (empty($response["Success"])) {
+      $code = (string) ($response["ErrorCode"] ?? $response["Code"] ?? "");
+      $this->assertNotTokenError($code);
+
+      $message = (string) ($response["Message"] ?? $code);
+      throw new \DomainException($message !== "" ? $message : $fallback);
+    }
+
+    return $response;
+  }
+
+  /**
+   * Đổi mã lỗi khắc phục được của MISA thành ngoại lệ riêng.
+   *
+   * Lỗi token thì tầng nghiệp vụ xin token mới rồi gọi lại, còn lỗi tranh chấp
+   * số hóa đơn thì phát hành lại nguyên yêu cầu.
+   *
+   * @param string $code
+   *   Mã lỗi MISA trả về.
+   */
+  private function assertNotTokenError(string $code): void {
+    if ($code === "") {
+      return;
+    }
+
+    $code = strtolower($code);
+
+    if (in_array($code, self::TOKEN_ERRORS, TRUE)) {
+      throw new InvoiceTokenException("Token MISA đã hết hạn ({$code})");
+    }
+
+    if (in_array($code, self::RETRY_ERRORS, TRUE)) {
+      throw new InvoiceRetryException("MISA báo lỗi tạm thời ({$code})");
+    }
+  }
+
+  /**
+   * Giải mã phần JSON mà MISA lồng dưới dạng chuỗi.
+   *
+   * @param mixed $value
+   *   Giá trị thô, có thể là mảng sẵn hoặc chuỗi JSON.
+   *
+   * @return array
+   *   Mảng đã giải mã, rỗng khi không đọc được.
+   */
+  private function decodeNested(mixed $value): array {
+    if (is_array($value)) {
+      return $value;
+    }
+
+    if (!is_string($value) || $value === "") {
+      return [];
+    }
+
+    $decoded = json_decode($value, TRUE);
+    return is_array($decoded) ? $decoded : [];
+  }
+
+  /**
+   * Đánh khoá danh sách kết quả theo một trường.
+   *
+   * @param array $items
+   *   Danh sách kết quả.
+   * @param string $key
+   *   Tên trường dùng làm khoá.
+   *
+   * @return array
+   *   Danh sách đã đánh khoá, bỏ qua phần tử thiếu khoá.
+   */
+  private function keyBy(array $items, string $key): array {
+    $result = [];
+
+    foreach ($items as $item) {
+      if (is_array($item) && !empty($item[$key])) {
+        $result[(string) $item[$key]] = $item;
+      }
+    }
+
+    return $result;
+  }
+
+  /**
+   * Đổi phản hồi tải file sang chuỗi nhị phân.
+   *
+   * MISA trả khi thì nhị phân thẳng, khi thì mảng JSON các byte.
+   *
+   * @param mixed $response
+   *   Phản hồi của endpoint tải file.
+   *
+   * @return string
+   *   Nội dung nhị phân, chuỗi rỗng khi chưa có file.
+   */
+  private function toBinary(mixed $response): string {
+    if (is_string($response)) {
+      return $response;
+    }
+
+    if (is_array($response) && $response !== [] && array_is_list($response)) {
+      $bytes = array_filter($response, "is_int");
+
+      if (count($bytes) === count($response)) {
+        return pack("C*", ...$response);
+      }
+    }
+
+    return "";
+  }
+
+  /**
+   * Header xác thực của nhóm API "/api2".
+   *
+   * @param array $config
+   *   Cấu hình kết nối.
+   *
+   * @return array
+   *   Header AppID, CompanyTaxCode, UserName.
+   */
+  private function authHeaders(array $config): array {
+    return [
+      "AppID" => (string) ($config["invoice_appid"] ?? ""),
+      "CompanyTaxCode" => (string) ($config["invoice_taxcode"] ?? ""),
+      "UserName" => (string) ($config["invoice_username"] ?? ""),
+    ];
+  }
+
+  /**
+   * Header Bearer của nhóm API "/api/integration".
+   *
+   * @param array $config
+   *   Cấu hình kết nối.
+   *
+   * @return array
+   *   Header Authorization.
+   */
+  private function bearer(array $config): array {
+    if (empty($config["invoice_token"])) {
+      throw new InvoiceTokenException("Chưa có token phát hành hóa đơn");
+    }
+
+    return ["Authorization" => "Bearer " . $config["invoice_token"]];
+  }
+
+  /**
+   * Header của nhóm API "/inbot".
+   *
+   * @param array $config
+   *   Cấu hình kết nối.
+   *
+   * @return array
+   *   Header ClientId và Authorization.
+   */
+  private function inbotHeaders(array $config): array {
+    if (empty($config["invoice_jwt_token"])) {
+      throw new InvoiceTokenException("Chưa có JWT token hóa đơn đầu vào");
+    }
+
+    return [
+      "ClientId" => (string) ($config["invoice_client"] ?? ""),
+      "Authorization" => "Bearer " . $config["invoice_jwt_token"],
+    ];
+  }
+
+  /**
+   * Dựng đường dẫn "/inbot" có subscriber và organization.
+   *
+   * @param array $config
+   *   Cấu hình kết nối.
+   * @param string $suffix
+   *   Phần đuôi của endpoint.
+   *
+   * @return string
+   *   Đường dẫn đầy đủ.
+   */
+  private function inbotPath(array $config, string $suffix): string {
+    $subscribers = (string) ($config["invoice_subscribers"] ?? "");
+    $organization = (string) ($config["invoice_organization"] ?? "");
+
+    if ($subscribers === "" || $organization === "") {
+      throw new InvoiceTokenException("Chưa có subscriber/organization của MISA");
+    }
+
+    return "/inbot/api/{$subscribers}/{$organization}/" . ltrim($suffix, "/");
+  }
+
+  /**
+   * Tách secure token khỏi chuỗi "sessionId;token" của MISA.
+   *
+   * @param string $value
+   *   Giá trị Data của validateUser.
+   *
+   * @return string
+   *   Phần token.
+   */
+  private function extractSecureToken(string $value): string {
+    $position = strpos($value, ";");
+    return $position === FALSE ? $value : substr($value, $position + 1);
   }
 
 }

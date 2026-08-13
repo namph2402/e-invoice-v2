@@ -16,8 +16,23 @@ services:
 
   e_invoice.get_config:
     class: Drupal\e_invoice\Service\GetConfigInvoice
-    arguments: ["@messenger", "@e_invoice.handle_invoice"]
+    arguments:
+      - "@plugin.manager.invoice_providers"
+      - "@entity_type.manager"
+      - "@messenger"
+      - "@logger.channel.e_invoice"
+      - "@datetime.time"
 
   e_invoice.handle_invoice:
     class: Drupal\e_invoice\Service\HandleInvoice
-    arguments: ["@plugin.manager.invoice_providers", "@entity_type.manager", "@entity_field.manager", "@file_system", "@file.repository", "@logger.channel.e_invoice", "@token"]
+    arguments:
+      - "@plugin.manager.invoice_providers"
+      - "@e_invoice.get_config"
+      - "@entity_type.manager"
+      - "@entity_field.manager"
+      - "@file_system"
+      - "@file.repository"
+      - "@database"
+      - "@logger.channel.e_invoice"
+      - "@token"
+      - "@datetime.time"
