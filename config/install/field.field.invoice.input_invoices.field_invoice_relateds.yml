@@ -8,7 +8,7 @@ id: invoice.input_invoices.field_invoice_relateds
 field_name: field_invoice_relateds
 entity_type: invoice
 bundle: input_invoices
-label: 'Invoice relateds'
+label: 'Hóa đơn liên quan'
 description: ''
 required: false
 translatable: false

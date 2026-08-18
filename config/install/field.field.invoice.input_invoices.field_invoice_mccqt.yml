@@ -8,7 +8,7 @@ id: invoice.input_invoices.field_invoice_mccqt
 field_name: field_invoice_mccqt
 entity_type: invoice
 bundle: input_invoices
-label: 'Invoice MCCQT'
+label: 'Mã CQT cấp'
 description: ''
 required: false
 translatable: false

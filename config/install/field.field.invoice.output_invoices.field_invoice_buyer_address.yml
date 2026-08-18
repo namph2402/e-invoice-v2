@@ -8,7 +8,7 @@ id: invoice.output_invoices.field_invoice_buyer_address
 field_name: field_invoice_buyer_address
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice buyer address'
+label: 'Người mua - Địa chỉ'
 description: ''
 required: false
 translatable: false

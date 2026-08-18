@@ -10,7 +10,7 @@ id: invoice.input_invoices.field_invoice_items
 field_name: field_invoice_items
 entity_type: invoice
 bundle: input_invoices
-label: 'Invoice items'
+label: 'Chi tiết hóa đơn'
 description: ''
 required: false
 translatable: false
@@ -19,7 +19,7 @@ default_value_callback: ''
 settings:
   field_settings:
     item_id:
-      label: 'Inv id'
+      label: ID
       list: false
       allowed_values: ''
       max: null
@@ -28,22 +28,22 @@ settings:
       prefix: ''
       suffix: ''
     item_code:
-      label: 'Inv code'
+      label: Mã
       list: false
       allowed_values: ''
       required: false
     item_name:
-      label: 'Inv name'
+      label: Tên
       list: false
       allowed_values: ''
       required: false
     item_unit:
-      label: 'Inv unit'
+      label: 'Đơn vị'
       list: false
       allowed_values: ''
       required: false
     item_quantity:
-      label: 'Inv quantity'
+      label: 'Số lượng'
       list: false
       allowed_values: ''
       max: null
@@ -52,7 +52,7 @@ settings:
       prefix: ''
       suffix: ''
     item_price:
-      label: 'Inv price'
+      label: 'Đơn giá'
       list: false
       allowed_values: ''
       max: null
@@ -61,7 +61,7 @@ settings:
       prefix: ''
       suffix: ''
     item_amount:
-      label: 'Inv amount'
+      label: 'Thành tiền'
       list: false
       allowed_values: ''
       max: null
@@ -70,12 +70,12 @@ settings:
       prefix: ''
       suffix: ''
     item_discount_rate:
-      label: 'Inv discount rate'
+      label: 'Chiết khấu'
       list: false
       allowed_values: ''
       required: false
     item_discount_amount:
-      label: 'Inv discount amount'
+      label: 'Tiền chiết khấu'
       list: false
       allowed_values: ''
       max: null
@@ -84,7 +84,7 @@ settings:
       prefix: ''
       suffix: ''
     item_amount_without_vat:
-      label: 'Inv amount without vat'
+      label: 'Tiền trước thuế (Sau chiết khấu)'
       list: false
       allowed_values: ''
       max: null
@@ -93,7 +93,7 @@ settings:
       prefix: ''
       suffix: ''
     item_vat_rate:
-      label: 'Inv vat rate'
+      label: 'Thuế suất'
       list: false
       allowed_values: ''
       max: null
@@ -102,7 +102,7 @@ settings:
       prefix: ''
       suffix: ''
     item_vat_amount:
-      label: 'Inv vat amount'
+      label: 'Tiền thuế'
       list: false
       allowed_values: ''
       max: null
@@ -111,7 +111,7 @@ settings:
       prefix: ''
       suffix: ''
     item_total_amount:
-      label: 'Inv total amount'
+      label: 'Tổng tiền'
       list: false
       allowed_values: ''
       max: null
@@ -120,7 +120,7 @@ settings:
       prefix: ''
       suffix: ''
     item_type:
-      label: 'Inv type'
+      label: Loại
       list: true
       allowed_values:
         -
@@ -140,7 +140,7 @@ settings:
           value: '6'
       required: false
     item_exist:
-      label: 'Inv exist'
+      label: 'Tình trạng'
       list: true
       allowed_values:
         -

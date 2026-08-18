@@ -8,7 +8,7 @@ id: invoice.input_invoices.field_invoice_accountant
 field_name: field_invoice_accountant
 entity_type: invoice
 bundle: input_invoices
-label: 'Invoice accountant'
+label: 'Người hạch toán'
 description: ''
 required: false
 translatable: false

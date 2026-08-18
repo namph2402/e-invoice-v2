@@ -8,7 +8,7 @@ id: invoice.output_invoices.field_invoice_buyer_name
 field_name: field_invoice_buyer_name
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice buyer name'
+label: 'Người mua - Họ tên'
 description: ''
 required: false
 translatable: false

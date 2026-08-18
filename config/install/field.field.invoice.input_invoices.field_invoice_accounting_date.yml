@@ -10,7 +10,7 @@ id: invoice.input_invoices.field_invoice_accounting_date
 field_name: field_invoice_accounting_date
 entity_type: invoice
 bundle: input_invoices
-label: 'Invoice accounting date'
+label: 'Ngày hạch toán'
 description: ''
 required: false
 translatable: false

@@ -8,7 +8,7 @@ id: invoice.output_invoices.field_invoice_amount_without_vat
 field_name: field_invoice_amount_without_vat
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice amount without vat'
+label: 'Thành tiền trước thuế'
 description: ''
 required: false
 translatable: false

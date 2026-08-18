@@ -8,7 +8,7 @@ id: taxonomy_term.config_e_invoice.field_inv_client
 field_name: field_inv_client
 entity_type: taxonomy_term
 bundle: config_e_invoice
-label: Client ID
+label: 'Client ID'
 description: ''
 required: false
 translatable: false

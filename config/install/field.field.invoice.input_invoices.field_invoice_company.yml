@@ -1,0 +1,28 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.input_invoices
+    - field.storage.invoice.field_invoice_company
+    - taxonomy.vocabulary.company
+id: invoice.input_invoices.field_invoice_company
+field_name: field_invoice_company
+entity_type: invoice
+bundle: input_invoices
+label: 'Tổ chức'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  handler: 'default:taxonomy_term'
+  handler_settings:
+    target_bundles:
+      company: company
+    sort:
+      field: name
+      direction: asc
+    auto_create: false
+    auto_create_bundle: ''
+field_type: entity_reference

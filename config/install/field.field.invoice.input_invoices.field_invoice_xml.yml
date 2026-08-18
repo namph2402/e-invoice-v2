@@ -10,7 +10,7 @@ id: invoice.input_invoices.field_invoice_xml
 field_name: field_invoice_xml
 entity_type: invoice
 bundle: input_invoices
-label: 'Invoice XML'
+label: XML
 description: ''
 required: false
 translatable: false

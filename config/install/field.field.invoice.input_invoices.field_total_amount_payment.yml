@@ -1,0 +1,22 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.input_invoices
+    - field.storage.invoice.field_total_amount_payment
+id: invoice.input_invoices.field_total_amount_payment
+field_name: field_total_amount_payment
+entity_type: invoice
+bundle: input_invoices
+label: 'Số tiền đã thanh toán'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings:
+  min: null
+  max: null
+  prefix: ''
+  suffix: ''
+field_type: decimal

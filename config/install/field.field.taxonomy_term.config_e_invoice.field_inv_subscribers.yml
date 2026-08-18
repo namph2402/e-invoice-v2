@@ -8,7 +8,7 @@ id: taxonomy_term.config_e_invoice.field_inv_subscribers
 field_name: field_inv_subscribers
 entity_type: taxonomy_term
 bundle: config_e_invoice
-label: 'Subscribers'
+label: Subscribers
 description: ''
 required: false
 translatable: false

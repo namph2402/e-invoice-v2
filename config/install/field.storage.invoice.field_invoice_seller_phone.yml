@@ -1,0 +1,19 @@
+uuid: a16b5aa0-cad1-465c-a66a-d225d2a4a113
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+    - telephone
+id: invoice.field_invoice_seller_phone
+field_name: field_invoice_seller_phone
+entity_type: invoice
+type: telephone
+settings: {  }
+module: telephone
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

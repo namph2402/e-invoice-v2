@@ -3,38 +3,51 @@ status: true
 dependencies:
   config:
     - e_invoice.invoice_type.input_invoices
+    - field.field.invoice.input_invoices.field_amount_payment_status
     - field.field.invoice.input_invoices.field_invoice_accountant
     - field.field.invoice.input_invoices.field_invoice_accounting_date
     - field.field.invoice.input_invoices.field_invoice_amount
     - field.field.invoice.input_invoices.field_invoice_amount_without_vat
     - field.field.invoice.input_invoices.field_invoice_buyer_address
     - field.field.invoice.input_invoices.field_invoice_buyer_name
+    - field.field.invoice.input_invoices.field_invoice_buyer_phone
     - field.field.invoice.input_invoices.field_invoice_buyer_taxcode
+    - field.field.invoice.input_invoices.field_invoice_company
     - field.field.invoice.input_invoices.field_invoice_date
     - field.field.invoice.input_invoices.field_invoice_discount_amount
     - field.field.invoice.input_invoices.field_invoice_id
     - field.field.invoice.input_invoices.field_invoice_import
     - field.field.invoice.input_invoices.field_invoice_items
+    - field.field.invoice.input_invoices.field_invoice_license_plate
     - field.field.invoice.input_invoices.field_invoice_mccqt
+    - field.field.invoice.input_invoices.field_invoice_mccqt_text
     - field.field.invoice.input_invoices.field_invoice_no
+    - field.field.invoice.input_invoices.field_invoice_pattern
     - field.field.invoice.input_invoices.field_invoice_payment
+    - field.field.invoice.input_invoices.field_invoice_payment_due_date
     - field.field.invoice.input_invoices.field_invoice_pdf
     - field.field.invoice.input_invoices.field_invoice_refno
     - field.field.invoice.input_invoices.field_invoice_relateds
     - field.field.invoice.input_invoices.field_invoice_seller_address
     - field.field.invoice.input_invoices.field_invoice_seller_name
+    - field.field.invoice.input_invoices.field_invoice_seller_phone
     - field.field.invoice.input_invoices.field_invoice_seller_taxcode
+    - field.field.invoice.input_invoices.field_invoice_serial
     - field.field.invoice.input_invoices.field_invoice_status
+    - field.field.invoice.input_invoices.field_invoice_status_custorm
     - field.field.invoice.input_invoices.field_invoice_total_amount
     - field.field.invoice.input_invoices.field_invoice_vat_amount
     - field.field.invoice.input_invoices.field_invoice_vat_rate
     - field.field.invoice.input_invoices.field_invoice_xml
+    - field.field.invoice.input_invoices.field_total_amount_not_payment
+    - field.field.invoice.input_invoices.field_total_amount_payment
   module:
     - datafield
     - datetime
     - field_group
     - input_pattern
     - options
+    - telephone
 third_party_settings:
   field_group:
     group_div_padding:
@@ -188,6 +201,13 @@ targetEntityType: invoice
 bundle: input_invoices
 mode: default
 content:
+  field_amount_payment_status:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 42
+    region: content
   field_invoice_accountant:
     type: string
     label: above
@@ -242,6 +262,14 @@ content:
     third_party_settings: {  }
     weight: 15
     region: content
+  field_invoice_buyer_phone:
+    type: telephone_link
+    label: above
+    settings:
+      title: ''
+    third_party_settings: {  }
+    weight: 19
+    region: content
   field_invoice_buyer_taxcode:
     type: string
     label: above
@@ -249,6 +277,14 @@ content:
       link_to_entity: false
     third_party_settings: {  }
     weight: 16
+    region: content
+  field_invoice_company:
+    type: entity_reference_label
+    label: above
+    settings:
+      link: true
+    third_party_settings: {  }
+    weight: 40
     region: content
   field_invoice_date:
     type: datetime_plain
@@ -448,6 +484,24 @@ content:
     third_party_settings: {  }
     weight: 11
     region: content
+  field_invoice_license_plate:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+      link_rel: canonical
+    third_party_settings: {  }
+    weight: 46
+    region: content
+  field_invoice_mccqt_text:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+      link_rel: canonical
+    third_party_settings: {  }
+    weight: 38
+    region: content
   field_invoice_no:
     type: string
     label: above
@@ -456,12 +510,30 @@ content:
     third_party_settings: {  }
     weight: 30
     region: content
+  field_invoice_pattern:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+      link_rel: canonical
+    third_party_settings: {  }
+    weight: 36
+    region: content
   field_invoice_payment:
     type: list_default
     label: above
     settings: {  }
     third_party_settings: {  }
     weight: 18
+    region: content
+  field_invoice_payment_due_date:
+    type: datetime_default
+    label: above
+    settings:
+      timezone_override: ''
+      format_type: medium
+    third_party_settings: {  }
+    weight: 41
     region: content
   field_invoice_relateds:
     type: list_attributes
@@ -490,6 +562,13 @@ content:
     third_party_settings: {  }
     weight: 24
     region: content
+  field_invoice_seller_phone:
+    type: basic_string
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 35
+    region: content
   field_invoice_seller_taxcode:
     type: string
     label: above
@@ -498,12 +577,28 @@ content:
     third_party_settings: {  }
     weight: 25
     region: content
+  field_invoice_serial:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+      link_rel: canonical
+    third_party_settings: {  }
+    weight: 37
+    region: content
   field_invoice_status:
     type: list_default
     label: above
     settings: {  }
     third_party_settings: {  }
     weight: 31
+    region: content
+  field_invoice_status_custorm:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 39
     region: content
   field_invoice_total_amount:
     type: number_decimal
@@ -537,6 +632,28 @@ content:
       prefix_suffix: true
     third_party_settings: {  }
     weight: 6
+    region: content
+  field_total_amount_not_payment:
+    type: number_decimal
+    label: above
+    settings:
+      thousand_separator: ''
+      decimal_separator: .
+      scale: 2
+      prefix_suffix: true
+    third_party_settings: {  }
+    weight: 44
+    region: content
+  field_total_amount_payment:
+    type: number_decimal
+    label: above
+    settings:
+      thousand_separator: ''
+      decimal_separator: .
+      scale: 2
+      prefix_suffix: true
+    third_party_settings: {  }
+    weight: 43
     region: content
 hidden:
   created: true

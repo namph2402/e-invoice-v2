@@ -10,7 +10,7 @@ id: taxonomy_term.config_e_invoice.field_inv_expiration
 field_name: field_inv_expiration
 entity_type: taxonomy_term
 bundle: config_e_invoice
-label: Expiration token
+label: 'Expiration token'
 description: ''
 required: false
 translatable: false

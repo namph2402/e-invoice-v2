@@ -10,7 +10,7 @@ id: invoice.input_invoices.field_invoice_import
 field_name: field_invoice_import
 entity_type: invoice
 bundle: input_invoices
-label: 'Invoice import'
+label: 'Trạng thái nhập hàng'
 description: ''
 required: false
 translatable: false

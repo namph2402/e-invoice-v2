@@ -1,0 +1,38 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+    - options
+id: invoice.field_amount_payment_status
+field_name: field_amount_payment_status
+entity_type: invoice
+type: list_integer
+settings:
+  allowed_values:
+    -
+      value: 0
+      label: 'Không thiết lập'
+    -
+      value: 1
+      label: 'Chưa thanh toán'
+    -
+      value: 2
+      label: 'Thanh toán toàn phần'
+    -
+      value: 3
+      label: 'Quá hạn thanh toán'
+    -
+      value: 4
+      label: 'Đến hạn thanh toán'
+    -
+      value: 5
+      label: 'Thanh toán 1 phần'
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

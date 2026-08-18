@@ -15,22 +15,37 @@ settings:
       type: integer
       max_length: 20
       size: small
+      precision: 10
       unsigned: false
+      scale: 2
+      datetime_type: date
     item_code:
       name: item_code
       type: string
       max_length: 255
       size: normal
+      precision: 10
+      unsigned: false
+      scale: 2
+      datetime_type: date
     item_name:
       name: item_name
       type: string
       max_length: 500
       size: normal
+      precision: 10
+      unsigned: false
+      scale: 2
+      datetime_type: date
     item_unit:
       name: item_unit
       type: string
       max_length: 255
       size: normal
+      precision: 10
+      unsigned: false
+      scale: 2
+      datetime_type: date
     item_quantity:
       name: item_quantity
       type: float
@@ -39,6 +54,7 @@ settings:
       precision: 10
       unsigned: false
       scale: 2
+      datetime_type: date
     item_price:
       name: item_price
       type: float
@@ -47,6 +63,7 @@ settings:
       precision: 20
       unsigned: false
       scale: 2
+      datetime_type: date
     item_amount:
       name: item_amount
       type: float
@@ -55,11 +72,16 @@ settings:
       precision: 20
       unsigned: false
       scale: 2
+      datetime_type: date
     item_discount_rate:
       name: item_discount_rate
       type: string
       max_length: 20
       size: normal
+      precision: 10
+      unsigned: false
+      scale: 2
+      datetime_type: date
     item_discount_amount:
       name: item_discount_amount
       type: float
@@ -68,6 +90,7 @@ settings:
       precision: 20
       unsigned: false
       scale: 2
+      datetime_type: date
     item_amount_without_vat:
       name: item_amount_without_vat
       type: float
@@ -76,6 +99,7 @@ settings:
       precision: 20
       unsigned: false
       scale: 2
+      datetime_type: date
     item_vat_rate:
       name: item_vat_rate
       type: float
@@ -84,6 +108,7 @@ settings:
       precision: 10
       unsigned: false
       scale: 2
+      datetime_type: date
     item_vat_amount:
       name: item_vat_amount
       type: float
@@ -92,6 +117,7 @@ settings:
       precision: 20
       unsigned: false
       scale: 2
+      datetime_type: date
     item_total_amount:
       name: item_total_amount
       type: float
@@ -100,16 +126,25 @@ settings:
       precision: 20
       unsigned: false
       scale: 2
+      datetime_type: date
     item_type:
       name: item_type
       type: string
       max_length: 10
       size: normal
+      precision: 10
+      unsigned: false
+      scale: 2
+      datetime_type: date
     item_exist:
       name: item_exist
       type: string
       max_length: 10
       size: normal
+      precision: 10
+      unsigned: false
+      scale: 2
+      datetime_type: date
 module: datafield
 locked: false
 cardinality: -1

@@ -8,7 +8,7 @@ id: invoice.output_invoices.field_invoice_is_xml
 field_name: field_invoice_is_xml
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice is XML'
+label: 'XML'
 description: ''
 required: false
 translatable: false

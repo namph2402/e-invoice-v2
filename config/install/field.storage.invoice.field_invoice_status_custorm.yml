@@ -1,0 +1,53 @@
+langcode: en
+status: true
+dependencies:
+  module:
+    - e_invoice
+    - options
+id: invoice.field_invoice_status_custorm
+field_name: field_invoice_status_custorm
+entity_type: invoice
+type: list_integer
+settings:
+  allowed_values:
+    -
+      value: 1
+      label: 'Hóa đơn đang chờ kiểm tra'
+    -
+      value: 2
+      label: 'Hóa đơn hợp lệ'
+    -
+      value: 8
+      label: 'Hóa đơn nháp'
+    -
+      value: 16
+      label: 'Hóa đơn không hợp lệ'
+    -
+      value: 24
+      label: 'Hóa đơn chưa thực hiện kiểm tra xong hết các chỉ tiêu'
+    -
+      value: 29
+      label: 'Hóa đơn rủi ro'
+    -
+      value: 30
+      label: 'Hóa đơn rủi ro'
+    -
+      value: 31
+      label: 'Không kiểm tra'
+    -
+      value: 997
+      label: 'Cờ dùng lọc hóa đơn có file xml'
+    -
+      value: 998
+      label: 'Cờ dùng lọc hóa đơn không có file xml'
+    -
+      value: 999
+      label: 'Cờ chỉ dùng để lọc hóa đơn không có bản thể hiện pdf'
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

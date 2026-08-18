@@ -10,7 +10,7 @@ id: invoice.output_invoices.field_invoice_date
 field_name: field_invoice_date
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice date'
+label: 'Ngày hóa đơn'
 description: ''
 required: false
 translatable: false

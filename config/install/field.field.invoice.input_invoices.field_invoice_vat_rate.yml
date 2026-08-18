@@ -8,7 +8,7 @@ id: invoice.input_invoices.field_invoice_vat_rate
 field_name: field_invoice_vat_rate
 entity_type: invoice
 bundle: input_invoices
-label: 'Invoice vat rate'
+label: 'Thuế suất'
 description: ''
 required: false
 translatable: false

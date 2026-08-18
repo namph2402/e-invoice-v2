@@ -3,38 +3,51 @@ status: true
 dependencies:
   config:
     - e_invoice.invoice_type.input_invoices
+    - field.field.invoice.input_invoices.field_amount_payment_status
     - field.field.invoice.input_invoices.field_invoice_accountant
     - field.field.invoice.input_invoices.field_invoice_accounting_date
     - field.field.invoice.input_invoices.field_invoice_amount
     - field.field.invoice.input_invoices.field_invoice_amount_without_vat
     - field.field.invoice.input_invoices.field_invoice_buyer_address
     - field.field.invoice.input_invoices.field_invoice_buyer_name
+    - field.field.invoice.input_invoices.field_invoice_buyer_phone
     - field.field.invoice.input_invoices.field_invoice_buyer_taxcode
+    - field.field.invoice.input_invoices.field_invoice_company
     - field.field.invoice.input_invoices.field_invoice_date
     - field.field.invoice.input_invoices.field_invoice_discount_amount
     - field.field.invoice.input_invoices.field_invoice_id
     - field.field.invoice.input_invoices.field_invoice_import
     - field.field.invoice.input_invoices.field_invoice_items
+    - field.field.invoice.input_invoices.field_invoice_license_plate
     - field.field.invoice.input_invoices.field_invoice_mccqt
+    - field.field.invoice.input_invoices.field_invoice_mccqt_text
     - field.field.invoice.input_invoices.field_invoice_no
+    - field.field.invoice.input_invoices.field_invoice_pattern
     - field.field.invoice.input_invoices.field_invoice_payment
+    - field.field.invoice.input_invoices.field_invoice_payment_due_date
     - field.field.invoice.input_invoices.field_invoice_pdf
     - field.field.invoice.input_invoices.field_invoice_refno
     - field.field.invoice.input_invoices.field_invoice_relateds
     - field.field.invoice.input_invoices.field_invoice_seller_address
     - field.field.invoice.input_invoices.field_invoice_seller_name
+    - field.field.invoice.input_invoices.field_invoice_seller_phone
     - field.field.invoice.input_invoices.field_invoice_seller_taxcode
+    - field.field.invoice.input_invoices.field_invoice_serial
     - field.field.invoice.input_invoices.field_invoice_status
+    - field.field.invoice.input_invoices.field_invoice_status_custorm
     - field.field.invoice.input_invoices.field_invoice_total_amount
     - field.field.invoice.input_invoices.field_invoice_vat_amount
     - field.field.invoice.input_invoices.field_invoice_vat_rate
     - field.field.invoice.input_invoices.field_invoice_xml
+    - field.field.invoice.input_invoices.field_total_amount_not_payment
+    - field.field.invoice.input_invoices.field_total_amount_payment
   module:
     - datafield
     - datetime
     - field_group
     - file
     - input_pattern
+    - telephone
 third_party_settings:
   field_group:
     group_div_row:
@@ -85,14 +98,17 @@ third_party_settings:
         - label
         - field_invoice_seller_name
         - field_invoice_seller_taxcode
+        - field_invoice_seller_phone
         - field_invoice_seller_address
         - field_invoice_buyer_name
         - field_invoice_buyer_taxcode
+        - field_invoice_buyer_phone
         - field_invoice_buyer_address
         - field_invoice_id
         - field_invoice_no
         - field_invoice_refno
         - field_invoice_mccqt
+        - field_invoice_mccqt_text
         - field_invoice_relateds
         - field_invoice_pdf
         - field_invoice_xml
@@ -230,13 +246,17 @@ third_party_settings:
         effect: none
         speed: fast
         required_fields: true
-_core:
-  default_config_hash: 0FOw91u6r6ccKrfc6u9ilkznGGDA5rVUub8aw6SQrb0
 id: invoice.input_invoices.default
 targetEntityType: invoice
 bundle: input_invoices
 mode: default
 content:
+  field_amount_payment_status:
+    type: options_select
+    weight: 36
+    region: content
+    settings: {  }
+    third_party_settings: {  }
   field_invoice_accountant:
     type: string_textfield
     weight: 8
@@ -289,7 +309,7 @@ content:
     third_party_settings: {  }
   field_invoice_buyer_address:
     type: string_textfield
-    weight: 7
+    weight: 9
     region: content
     settings:
       size: 60
@@ -297,17 +317,34 @@ content:
     third_party_settings: {  }
   field_invoice_buyer_name:
     type: string_textfield
-    weight: 5
+    weight: 6
     region: content
     settings:
       size: 60
       placeholder: ''
     third_party_settings: {  }
-  field_invoice_buyer_taxcode:
-    type: string_textfield
-    weight: 6
+  field_invoice_buyer_phone:
+    type: telephone_default
+    weight: 8
     region: content
     settings:
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_buyer_taxcode:
+    type: string_textfield
+    weight: 7
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_company:
+    type: entity_reference_autocomplete
+    weight: 5
+    region: content
+    settings:
+      match_operator: CONTAINS
+      match_limit: 10
       size: 60
       placeholder: ''
     third_party_settings: {  }
@@ -337,11 +374,17 @@ content:
     third_party_settings: {  }
   field_invoice_id:
     type: string_textfield
-    weight: 8
+    weight: 10
     region: content
     settings:
       size: 60
       placeholder: ''
+    third_party_settings: {  }
+  field_invoice_import:
+    type: options_select
+    weight: 4
+    region: content
+    settings: {  }
     third_party_settings: {  }
   field_invoice_items:
     type: data_field_table_widget
@@ -505,9 +548,25 @@ content:
           weight: 0
           col: ''
     third_party_settings: {  }
+  field_invoice_license_plate:
+    type: string_textfield
+    weight: 40
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
   field_invoice_mccqt:
     type: string_textfield
-    weight: 11
+    weight: 13
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_mccqt_text:
+    type: string_textfield
+    weight: 14
     region: content
     settings:
       size: 60
@@ -515,7 +574,15 @@ content:
     third_party_settings: {  }
   field_invoice_no:
     type: string_textfield
-    weight: 9
+    weight: 11
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
+  field_invoice_pattern:
+    type: string_textfield
+    weight: 1
     region: content
     settings:
       size: 60
@@ -527,22 +594,20 @@ content:
     region: content
     settings: {  }
     third_party_settings: {  }
+  field_invoice_payment_due_date:
+    type: datetime_default
+    weight: 35
+    region: content
+    settings: {  }
+    third_party_settings: {  }
   field_invoice_pdf:
     type: file_generic
-    weight: 13
+    weight: 16
     region: content
     settings:
       progress_indicator: throbber
     third_party_settings: {  }
   field_invoice_refno:
-    type: string_textfield
-    weight: 10
-    region: content
-    settings:
-      size: 60
-      placeholder: ''
-    third_party_settings: {  }
-  field_invoice_relateds:
     type: string_textfield
     weight: 12
     region: content
@@ -550,9 +615,17 @@ content:
       size: 60
       placeholder: ''
     third_party_settings: {  }
+  field_invoice_relateds:
+    type: string_textfield
+    weight: 15
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
   field_invoice_seller_address:
     type: string_textfield
-    weight: 4
+    weight: 5
     region: content
     settings:
       size: 60
@@ -566,6 +639,13 @@ content:
       size: 60
       placeholder: ''
     third_party_settings: {  }
+  field_invoice_seller_phone:
+    type: telephone_default
+    weight: 4
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
   field_invoice_seller_taxcode:
     type: string_textfield
     weight: 3
@@ -574,9 +654,23 @@ content:
       size: 60
       placeholder: ''
     third_party_settings: {  }
+  field_invoice_serial:
+    type: string_textfield
+    weight: 2
+    region: content
+    settings:
+      size: 60
+      placeholder: ''
+    third_party_settings: {  }
   field_invoice_status:
     type: options_select
     weight: 4
+    region: content
+    settings: {  }
+    third_party_settings: {  }
+  field_invoice_status_custorm:
+    type: options_select
+    weight: 3
     region: content
     settings: {  }
     third_party_settings: {  }
@@ -636,10 +730,24 @@ content:
     third_party_settings: {  }
   field_invoice_xml:
     type: file_generic
-    weight: 14
+    weight: 17
     region: content
     settings:
       progress_indicator: throbber
+    third_party_settings: {  }
+  field_total_amount_not_payment:
+    type: number
+    weight: 38
+    region: content
+    settings:
+      placeholder: ''
+    third_party_settings: {  }
+  field_total_amount_payment:
+    type: number
+    weight: 37
+    region: content
+    settings:
+      placeholder: ''
     third_party_settings: {  }
   label:
     type: string_textfield
@@ -652,6 +760,5 @@ content:
 hidden:
   created: true
   description: true
-  field_invoice_import: true
   status: true
   uid: true

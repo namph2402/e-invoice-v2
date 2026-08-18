@@ -1,0 +1,18 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - e_invoice.invoice_type.input_invoices
+    - field.storage.invoice.field_invoice_license_plate
+id: invoice.input_invoices.field_invoice_license_plate
+field_name: field_invoice_license_plate
+entity_type: invoice
+bundle: input_invoices
+label: 'Biển số xe'
+description: ''
+required: false
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

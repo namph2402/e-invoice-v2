@@ -8,7 +8,7 @@ id: invoice.output_invoices.field_invoice_no
 field_name: field_invoice_no
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice no'
+label: 'Số hóa đơn'
 description: ''
 required: false
 translatable: false

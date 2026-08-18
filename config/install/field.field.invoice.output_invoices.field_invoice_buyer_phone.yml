@@ -10,7 +10,7 @@ id: invoice.output_invoices.field_invoice_buyer_phone
 field_name: field_invoice_buyer_phone
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice buyer phone'
+label: 'Người mua - Số điện thoại'
 description: ''
 required: false
 translatable: false
