@@ -63,7 +63,7 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
   private const PUBLISH_ATTEMPTS = 3;
 
   /**
-   * Khoảng nghỉ (giây) giữa hai lần hỏi file.
+   * Khoảng nghỉ (giây).
    */
   private const TIME_DELAY = 2;
 
@@ -124,9 +124,9 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
     $plugin_id,
     $plugin_definition,
     protected UuidInterface $uuid,
-    protected GetNumberToWords $getNumberToWords,
     protected ClientInterface $client,
     protected LoggerInterface $logger,
+    protected GetNumberToWords $getNumberToWords,
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
   }
@@ -140,14 +140,14 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
       $plugin_id,
       $plugin_definition,
       $container->get("uuid"),
-      $container->get("e_invoice.get_number_to_words"),
       $container->get("http_client"),
       $container->get("logger.channel.e_invoice"),
+      $container->get("e_invoice.get_number_to_words"),
     );
   }
 
   /**
-   * {@inheritdoc}
+   * Xác nhận tài khoản kết nối.
    */
   public function authenticate(array $config): array {
     $result = [
@@ -476,7 +476,7 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
   /**
    * {@inheritdoc}
    */
-  public function download(array $config, array $ids): string {
+  public function download(array $config, array $ids, string $type): string {
     $ids = array_values(array_unique(array_filter($ids)));
 
     if (empty($ids)) {
@@ -489,7 +489,7 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
         $this->inbotPath($config, "download/zip"),
         $this->inbotHeaders($config),
         [
-          "FileType" => 1,
+          "FileType" => $type,
           "LstInvID" => $ids,
         ]
       ),
@@ -501,6 +501,8 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
     if ($download_key === "") {
       throw new \DomainException("MISA không trả về khoá tải file");
     }
+
+    sleep(10);
 
     $path = $this->inbotPath($config, "download/{$download_key}/download");
 
@@ -737,8 +739,6 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
         "CurrencyCode" => $item["invoice_currency_code"] ?? "VND",
         "ExchangeRate" => 1,
         "PaymentMethodName" => $item["invoice_payment"] ?? NULL,
-        // BuyerLegalName và BuyerAddress là trường bắt buộc, để NULL thì MISA
-        // trả RequireError_*.
         "BuyerLegalName" => ($item["invoice_buyer_legal"] ?? "") ?: "Khách vãng lai",
         "BuyerCode" => $item["invoice_buyer_code"] ?? NULL,
         "BuyerFullName" => ($item["invoice_buyer_name"] ?? "") ?: "NGƯỜI MUA KHÔNG LẤY HÓA ĐƠN",
@@ -960,29 +960,37 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
       "field_invoice_pattern" => $item["TemplateNo"] ?? "",
       "field_invoice_serial" => ($item["TemplateNo"] ?? "") . ($item["Series"] ?? ""),
       "field_invoice_status" => $this->mapStatus($item["StatusInvoice"] ?? NULL),
+      "field_invoice_status_custorm" => $item["Status"] ?? NULL,
       "field_invoice_seller_name" => $item["SellerName"] ?? "",
       "field_invoice_seller_taxcode" => $item["SellerTaxCode"] ?? "",
       "field_invoice_seller_address" => $item["SellerAddress"] ?? "",
+      "field_invoice_seller_phone" => $item["SellerPhoneNumber"] ?? "",
       "field_invoice_buyer_name" => $item["BuyerName"] ?? "",
       "field_invoice_buyer_taxcode" => $item["BuyerTaxCode"] ?? "",
       "field_invoice_buyer_address" => $item["BuyerAddress"] ?? "",
       "field_invoice_mccqt" => $item["MCCQT"] ?? "",
-      "field_invoice_date" => $this->formatDate($item["InvoiceDate"] ?? NULL) ?? date("Y-m-d"),
-      "field_invoice_amount" => $item["Amount"] ?? $item["TotalSaleAmount"] ?? 0,
-      "field_invoice_discount_amount" => $item["TotalDiscountAmount"] ?? 0,
-      "field_invoice_amount_without_vat" => $item["TotalAmountWithoutVat"] ?? 0,
-      "field_invoice_vat_amount" => $item["TotalVATAmount"] ?? 0,
-      "field_invoice_vat_rate" => $item["VatRate"] ?? 0,
+      "field_invoice_mccqt_text" => $item["MCCQTText"] ?? "",
+      "field_amount_payment_status" => $item["AmountPayment"] ?? 0,
+      "field_total_amount_payment" => $item["TotalAmountPayment"] ?? 0,
+      "field_total_amount_not_payment" => $item["TotalAmountNotPayment"] ?? 0,
+      "field_invoice_payment_due_date" => $this->formatDate($item["PaymentDueDate"] ?? NULL),
       "field_invoice_payment" => match ($item["PaymentMethod"] ?? "") {
         "TM" => "inv_tm",
         "CK" => "inv_ck",
         default => "inv_tm_ck",
       },
+      "field_invoice_date" => $this->formatDate($item["InvoiceDate"] ?? NULL),
+      "field_invoice_amount" => $item["Amount"] ?? $item["TotalSaleAmount"] ?? 0,
+      "field_invoice_discount_amount" => $item["TotalDiscountAmount"] ?? 0,
+      "field_invoice_amount_without_vat" => $item["TotalAmountWithoutVat"] ?? 0,
+      "field_invoice_vat_amount" => $item["TotalVATAmount"] ?? 0,
+      "field_invoice_vat_rate" => $item["VatRate"] ?? 0,
       "field_invoice_total_amount" => $item["TotalAmount"] ?? 0,
-      "field_invoice_accountant" => $item["Accountant"] ?? "",
-      "field_invoice_refno" => $item["RefNo"] ?? "",
+      "field_invoice_license_plate" => $item["LicensePlate"] ?? "",
       "field_invoice_relateds" => $related["InvoiceId"] ?? "",
       "field_invoice_items" => $products,
+      "field_invoice_refno" => $item["RefNo"] ?? "",
+      "field_invoice_accountant" => $item["Accountant"] ?? "",
       "field_invoice_accounting_date" => $this->formatDate($item["AccountingDate"] ?? NULL),
     ];
   }

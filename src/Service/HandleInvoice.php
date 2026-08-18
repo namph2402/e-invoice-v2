@@ -451,8 +451,8 @@ class HandleInvoice {
    * @return array
    *   Kết quả xử lý.
    */
-  public function fileInputInvoice(array $invoices, array $config): array {
-    return $this->guard(function () use ($invoices, $config) {
+  public function fileInputInvoice(array $invoices, array $config, string $type): array {
+    return $this->guard(function () use ($invoices, $config, $type) {
       $saved = 0;
       $total = 0;
 
@@ -471,7 +471,8 @@ class HandleInvoice {
           $config,
           fn (InvoiceProvidersInterface $provider, array $config) => $provider->download(
             $config,
-            [$invoice_id]
+            [$invoice_id],
+            $type
           )
         );
 

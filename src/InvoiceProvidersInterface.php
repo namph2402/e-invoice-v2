@@ -141,10 +141,12 @@ interface InvoiceProvidersInterface {
    *   Cấu hình kết nối.
    * @param array $ids
    *   Danh sách id hóa đơn cần tải.
+   * @param string $type
+   *   Loại file cần tải.
    *
    * @return string
    *   Nội dung nhị phân của file ZIP, chuỗi rỗng khi không tải được.
    */
-  public function download(array $config, array $ids): string;
+  public function download(array $config, array $ids, string $type): string;
 
 }
