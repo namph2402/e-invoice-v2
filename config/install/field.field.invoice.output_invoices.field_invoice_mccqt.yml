@@ -8,7 +8,7 @@ id: invoice.output_invoices.field_invoice_mccqt
 field_name: field_invoice_mccqt
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice MCCQT'
+label: 'Mã CQT'
 description: ''
 required: false
 translatable: false

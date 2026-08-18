@@ -10,7 +10,7 @@ id: invoice.output_invoices.field_invoice_status
 field_name: field_invoice_status
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice status'
+label: 'Trạng thái hóa đơn'
 description: ''
 required: false
 translatable: false

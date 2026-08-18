@@ -10,7 +10,7 @@ id: invoice.output_invoices.field_invoice_export
 field_name: field_invoice_export
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice export'
+label: 'Tạo xuất hàng'
 description: ''
 required: false
 translatable: false

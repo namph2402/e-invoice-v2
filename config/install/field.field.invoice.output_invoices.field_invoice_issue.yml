@@ -8,7 +8,7 @@ id: invoice.output_invoices.field_invoice_issue
 field_name: field_invoice_issue
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice issue'
+label: 'Đã phát hành hóa đơn'
 description: ''
 required: false
 translatable: false

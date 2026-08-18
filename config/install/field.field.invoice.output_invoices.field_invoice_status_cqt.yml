@@ -10,7 +10,7 @@ id: invoice.output_invoices.field_invoice_status_cqt
 field_name: field_invoice_status_cqt
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice status CQT'
+label: 'Trạng thái CQT'
 description: ''
 required: false
 translatable: false

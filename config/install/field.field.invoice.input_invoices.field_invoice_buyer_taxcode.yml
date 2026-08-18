@@ -8,7 +8,7 @@ id: invoice.input_invoices.field_invoice_buyer_taxcode
 field_name: field_invoice_buyer_taxcode
 entity_type: invoice
 bundle: input_invoices
-label: 'Người mua - Mã thuế'
+label: 'Người mua - Mã số thuế'
 description: ''
 required: false
 translatable: false

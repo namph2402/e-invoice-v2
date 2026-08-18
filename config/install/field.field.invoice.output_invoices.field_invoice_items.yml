@@ -10,7 +10,7 @@ id: invoice.output_invoices.field_invoice_items
 field_name: field_invoice_items
 entity_type: invoice
 bundle: output_invoices
-label: 'Invoice items'
+label: 'Chi tiết hóa đơn'
 description: ''
 required: false
 translatable: false
