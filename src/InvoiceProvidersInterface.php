@@ -121,6 +121,23 @@ interface InvoiceProvidersInterface {
   public function accounting(array $config, array $data): array;
 
   /**
+   * Cập nhật thông tin thanh toán hóa đơn đầu vào.
+   *
+   * @param array $config
+   *   Cấu hình kết nối.
+   * @param array $data
+   *   Gồm "invoice_id" (mã hóa đơn), "payment_date" (hạn thanh toán),
+   *   "payment_pair" (người thanh toán), "total_amount_payment" (số tiền đã
+   *   thanh toán), "total_amount_not_payment" (số tiền chưa thanh toán),
+   *   "number_payment_next" (số ngày thanh toán tiếp theo) và "amount_payment"
+   *   (trạng thái thanh toán 0-5).
+   *
+   * @return array
+   *   Phản hồi của nhà cung cấp.
+   */
+  public function payment(array $config, array $data): array;
+
+  /**
    * Tải PDF hóa đơn đầu ra theo mã giao dịch.
    *
    * @param array $config

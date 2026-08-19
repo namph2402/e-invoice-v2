@@ -248,8 +248,6 @@ class HandleInvoice {
         }
 
         if (isset($result["SendTaxStatus"])) {
-          // Danh sách giá trị cho phép của field chỉ tới 4, giá trị lạ sẽ làm
-          // hỏng cả lần lưu.
           $cqt = (int) $result["SendTaxStatus"];
           $fields["field_invoice_status_cqt"] = ($cqt >= 0 && $cqt <= 4) ? $cqt : 0;
         }
@@ -401,7 +399,7 @@ class HandleInvoice {
    * @return array
    *   Kết quả xử lý.
    */
-  public function accountingInvoice(array $invoices, array $config, array $params): array {
+  public function accountingInvoice(array $invoices, array $config, array $params = []): array {
     return $this->guard(function () use ($invoices, $config, $params) {
       $by_id = [];
 
@@ -427,12 +425,71 @@ class HandleInvoice {
         fn (InvoiceProvidersInterface $provider, array $config) => $provider->accounting($config, $params)
       );
 
-      // Nhà cung cấp nhận cả lô nên phải cập nhật hết, không chỉ hóa đơn cuối.
       foreach ($by_id as $invoice) {
         $this->updateInvoice($invoice, [
-          "field_invoice_accountant" => $params["accountant"] ?? "",
+          "field_invoice_accountant" => $params["accountant"] ?? NULL,
           "field_invoice_accounting_date" => $params["accountant_date"] ?? NULL,
-          "field_invoice_refno" => $params["ref_no"] ?? "",
+          "field_invoice_refno" => $params["ref_no"] ?? NULL,
+        ]);
+      }
+
+      return ["success" => TRUE];
+    });
+  }
+
+  /**
+   * Cập nhật thông tin thanh toán hóa đơn đầu vào.
+   *
+   * @param array $invoices
+   *   Entity hóa đơn đầu vào.
+   * @param array $config
+   *   Cấu hình kết nối.
+   * @param array $params
+   *   Gồm "payment_date", "payment_pair", "total_amount_payment",
+   *   "total_amount_not_payment", "number_payment_next", "amount_payment".
+   *
+   * @return array
+   *   Kết quả xử lý.
+   */
+  public function paymentInvoice(array $invoices, array $config, array $params = []): array {
+    return $this->guard(function () use ($invoices, $config, $params) {
+      $by_id = [];
+
+      foreach ($invoices as $invoice) {
+        $invoice_id = $invoice->get("field_invoice_id")->value;
+
+        if (!empty($invoice_id)) {
+          $by_id[$invoice_id] = $invoice;
+        }
+      }
+
+      if (empty($by_id)) {
+        return [
+          "success" => FALSE,
+          "message" => "Không tìm thấy mã hóa đơn để cập nhật thanh toán",
+        ];
+      }
+
+      foreach ($by_id as $invoice_id => $invoice) {
+        $data = $params;
+        $data["invoice_id"] = $invoice_id;
+
+        if (!isset($data["total_amount_not_payment"])) {
+          $total = (float) ($invoice->get("field_invoice_total_amount")->value ?? 0);
+          $paid = (float) ($data["total_amount_payment"] ?? 0);
+          $data["total_amount_not_payment"] = max($total - $paid, 0);
+        }
+
+        $this->call(
+          $config,
+          fn (InvoiceProvidersInterface $provider, array $config) => $provider->payment($config, $data)
+        );
+
+        $this->updateInvoice($invoice, [
+          "field_invoice_payment_due_date" => $data["payment_date"] ?? NULL,
+          "field_total_amount_payment" => $data["total_amount_payment"] ?? NULL,
+          "field_total_amount_not_payment" => $data["total_amount_not_payment"],
+          "field_amount_payment_status" => $data["amount_payment"] ?? NULL,
         ]);
       }
 
@@ -764,7 +821,7 @@ class HandleInvoice {
    */
   private function updateInvoice(InvoiceInterface $invoice, array $fields): void {
     foreach ($fields as $name => $value) {
-      if ($value !== NULL && $invoice->hasField($name)) {
+      if ($invoice->hasField($name)) {
         $invoice->set($name, $value);
       }
     }
@@ -930,7 +987,6 @@ class HandleInvoice {
       throw new \DomainException("Cannot prepare temporary directory");
     }
 
-    // Tên file kèm id hóa đơn để hai lần tải song song không ghi đè lên nhau.
     $path = $this->fileSystem->realpath($directory) . "/invoice-" . $invoice->id() . ".zip";
     file_put_contents($path, $binary);
 
@@ -974,10 +1030,6 @@ class HandleInvoice {
     }
     finally {
       $this->fileSystem->unlink($path);
-    }
-
-    if (empty($saved["pdf"])) {
-      return FALSE;
     }
 
     $values = [];

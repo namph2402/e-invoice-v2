@@ -450,17 +450,17 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
       throw new \DomainException("Không tìm thấy hóa đơn cần hạch toán");
     }
 
-    // Tài liệu: gửi mỗi InvoiceId là bỏ đánh dấu hạch toán, gửi kèm thông tin
-    // kế toán là đánh dấu đã hạch toán.
-    $payload = ["InvoiceId" => array_values($invoice_id)];
+    $list_invoice_id = array_values($invoice_id);
 
-    if (!empty($data["accountant"])) {
-      $payload += [
-        "Accountant" => $data["accountant"],
-        "AccountingDate" => $data["accountant_date"] ?? date("Y-m-d"),
-        "RefNo" => $data["ref_no"] ?? "",
-      ];
-    }
+    $payload = [
+      "InvoiceId" => count($list_invoice_id) > 1 ? $list_invoice_id : reset($list_invoice_id)
+    ];
+
+    $payload += [
+      "Accountant" => $data["accountant"] ?? NULL,
+      "AccountingDate" => $data["accountant_date"] ?? NULL,
+      "RefNo" => $data["ref_no"] ?? NULL,
+    ];
 
     return $this->api2(
       $this->request(
@@ -470,6 +470,38 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
         $payload
       ),
       "Hạch toán hóa đơn thất bại"
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function payment(array $config, array $data): array {
+    $invoice_id = (string) ($data["invoice_id"] ?? "");
+
+    if ($invoice_id === "") {
+      throw new \DomainException("Không tìm thấy hóa đơn cần cập nhật thanh toán");
+    }
+
+    // MISA chỉ nhận một hóa đơn mỗi lần, tầng nghiệp vụ tự lặp danh sách.
+    $payload = [
+      "InvoiceId" => $invoice_id,
+      "PaymentDate" => $data["payment_date"] ?? NULL,
+      "PaymentPair" => $data["payment_pair"] ?? NULL,
+      "TotalAmountPayment" => $data["total_amount_payment"] ?? NULL,
+      "TotalAmountNotPayment" => $data["total_amount_not_payment"] ?? NULL,
+      "NumberPaymentNext" => $data["number_payment_next"] ?? NULL,
+      "AmountPayment" => $data["amount_payment"] ?? NULL,
+    ];
+
+    return $this->api2(
+      $this->request(
+        $config["invoice_appurl"],
+        $this->inbotPath($config, "invoices/invoicepayment"),
+        $this->inbotHeaders($config),
+        $payload
+      ),
+      "Cập nhật thông tin thanh toán thất bại"
     );
   }
 
@@ -970,9 +1002,9 @@ class MisaProvider extends PluginBase implements InvoiceProvidersInterface, Cont
       "field_invoice_buyer_address" => $item["BuyerAddress"] ?? "",
       "field_invoice_mccqt" => $item["MCCQT"] ?? "",
       "field_invoice_mccqt_text" => $item["MCCQTText"] ?? "",
-      "field_amount_payment_status" => $item["AmountPayment"] ?? 0,
-      "field_total_amount_payment" => $item["TotalAmountPayment"] ?? 0,
-      "field_total_amount_not_payment" => $item["TotalAmountNotPayment"] ?? 0,
+      "field_amount_payment_status" => !empty($item["AmountPayment"]) ? $item["AmountPayment"] ?? 0 : 0,
+      "field_total_amount_payment" =>  !empty($item["TotalAmountPayment"]) ? $item["TotalAmountPayment"] ?? 0 : 0,
+      "field_total_amount_not_payment" =>  !empty($item["TotalAmountNotPayment"]) ? $item["TotalAmountNotPayment"] ?? 0 : 0,
       "field_invoice_payment_due_date" => $this->formatDate($item["PaymentDueDate"] ?? NULL),
       "field_invoice_payment" => match ($item["PaymentMethod"] ?? "") {
         "TM" => "inv_tm",

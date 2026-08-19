@@ -90,7 +90,7 @@ class GetConfigInvoice {
       return NULL;
     }
 
-    /** @var \Drupal\taxonomy\TermInterface|null $config_entity */
+    /** @var TermInterface|null $config_entity */
     $config_entity = $this->entityTypeManager
       ->getStorage("taxonomy_term")
       ->load($term_id);
@@ -113,7 +113,7 @@ class GetConfigInvoice {
   /**
    * Đọc cấu hình hóa đơn từ taxonomy term.
    *
-   * @param \Drupal\taxonomy\TermInterface $config_entity
+   * @param TermInterface $config_entity
    *   Term cấu hình hóa đơn của công ty.
    *
    * @return array
@@ -147,7 +147,7 @@ class GetConfigInvoice {
    * Term không được lưu ở đây, chỗ gọi tự quyết định (hook presave chỉ cần gán,
    * còn ::handle() và ::refresh() thì phải gọi save).
    *
-   * @param \Drupal\taxonomy\TermInterface $config_entity
+   * @param TermInterface $config_entity
    *   Term cấu hình sẽ được gán token mới.
    * @param array|null $config
    *   Cấu hình đã đọc sẵn, để trống thì tự đọc lại từ term.
@@ -230,7 +230,7 @@ class GetConfigInvoice {
   /**
    * Lưu term cấu hình mà không kích hoạt lại hook lấy token.
    *
-   * @param \Drupal\taxonomy\TermInterface $config_entity
+   * @param TermInterface $config_entity
    *   Term cấu hình vừa được gán token mới.
    */
   private function saveConfigEntity(TermInterface $config_entity): void {
@@ -251,7 +251,7 @@ class GetConfigInvoice {
   /**
    * Đọc giá trị field kiểu chuỗi, trả chuỗi rỗng khi bundle không có field.
    *
-   * @param \Drupal\taxonomy\TermInterface $config_entity
+   * @param TermInterface $config_entity
    *   Term cấu hình.
    * @param string $field
    *   Tên field.
@@ -268,7 +268,7 @@ class GetConfigInvoice {
   /**
    * Đọc giá trị field kiểu link, bỏ dấu "/" thừa ở cuối.
    *
-   * @param \Drupal\taxonomy\TermInterface $config_entity
+   * @param TermInterface $config_entity
    *   Term cấu hình.
    * @param string $field
    *   Tên field.

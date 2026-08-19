@@ -9,7 +9,7 @@ field_name: field_total_amount_not_payment
 entity_type: invoice
 type: decimal
 settings:
-  precision: 10
+  precision: 20
   scale: 2
 module: core
 locked: false
